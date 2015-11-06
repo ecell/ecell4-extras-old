@@ -105,6 +105,13 @@ class Coordinator:
     def t(self):
         return self.__t
 
+    def get_value(self, sp):
+        value = 0.0
+        for ev in self.events:
+            if ev.own(sp):
+                value += ev.sim.world().get_value_exact(sp)
+        return value
+
     def add_event(self, ev):
         self.events.append(ev)
         return ev

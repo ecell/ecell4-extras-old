@@ -15,7 +15,8 @@ def test1():
     edge_lengths = Real3(1, 1, 1)
 
     with species_attributes():
-        A1 | A2 | B1 | B2 | C1 | C2 | D1 | D2 | E1 | E2 | {"D": str(D), "radius": str(radius)}
+        A1 | A2 | B1 | B2 | C1 | C2 | D1 | D2 | E1 | E2 | {
+            "D": str(D), "radius": str(radius)}
 
     with reaction_rules():
         A1 == A2 | (1.0, 1.0)
@@ -78,16 +79,16 @@ def test1():
     def log(owner):
         data.append((
             owner.t(),
-            owner.events[0].sim.world().get_value_exact(Species("A1")),
-            owner.events[0].sim.world().get_value_exact(Species("A2")),
-            owner.events[1].sim.world().get_value_exact(Species("B1")),
-            owner.events[1].sim.world().get_value_exact(Species("B2")),
-            owner.events[2].sim.world().get_value_exact(Species("C1")),
-            owner.events[2].sim.world().get_value_exact(Species("C2")),
-            owner.events[3].sim.world().get_value_exact(Species("D1")),
-            owner.events[3].sim.world().get_value_exact(Species("D2")),
-            owner.events[4].sim.world().get_value_exact(Species("E1")),
-            owner.events[4].sim.world().get_value_exact(Species("E2")),
+            owner.get_value(Species("A1")),
+            owner.get_value(Species("A2")),
+            owner.get_value(Species("B1")),
+            owner.get_value(Species("B2")),
+            owner.get_value(Species("C1")),
+            owner.get_value(Species("C2")),
+            owner.get_value(Species("D1")),
+            owner.get_value(Species("D2")),
+            owner.get_value(Species("E1")),
+            owner.get_value(Species("E2")),
             ))
 
     log(owner)
@@ -143,11 +144,11 @@ def test2():
     def log(owner):
         data.append((
             owner.t(),
-            owner.events[0].sim.world().get_value_exact(Species("A1")),
-            owner.events[0].sim.world().get_value_exact(Species("A2")),
-            owner.events[1].sim.world().get_value_exact(Species("E1")),
-            owner.events[1].sim.world().get_value_exact(Species("E2")),
-            owner.events[1].sim.world().get_value_exact(Species("A1")),
+            owner.get_value(Species("A1")),
+            owner.get_value(Species("A2")),
+            owner.get_value(Species("E1")),
+            owner.get_value(Species("E2")),
+            w2.get_value_exact(Species("A1")),
             ))
 
     log(owner)
@@ -168,5 +169,5 @@ def test2():
 
 
 if __name__ == "__main__":
-    test1()
-    # test2()
+    # test1()
+    test2()
