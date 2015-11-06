@@ -32,15 +32,19 @@ class SimulatorEvent:
             assert self.sim.t() == t
             return True
 
-        last_reactions = interrupter(self.sim).last_reactions()
-        dirty = False
-        for rr in last_reactions:
-            if self._interrupt(t, rr[1]):
-                dirty = True
-        if dirty:
-            self.sim.initialize()
-            return True
+        if interrupter.updated():
+            last_reactions = interrupter(self.sim).last_reactions()
+            dirty = False
+            for rr in last_reactions:
+                if self._interrupt(t, rr[1]):
+                    dirty = True
+            if dirty:
+                self.sim.initialize()
+                return True
         return False
+
+    def updated(self):
+        return True
 
 class DiscreteEvent(SimulatorEvent):
 
@@ -52,6 +56,9 @@ class DiscreteEvent(SimulatorEvent):
 
     def step(self):
         self.sim.step()
+
+    def updated(self):
+        return len(self.sim.last_reactions()) > 0
 
 class DiscreteTimeEvent(SimulatorEvent):
 
@@ -161,6 +168,9 @@ class ODEEvent(DiscreteTimeEvent):
                 for i in range(int(value)):
                     retval.append((rr, ri))
         return retval
+
+    def updated(self):
+        return len(self.__last_reactions) > 0
 
 class GillespieWorldAdapter:
 

@@ -133,8 +133,8 @@ def test2():
             ))
 
     while owner.step(50):
-        # if len(owner.last_event.sim.last_reactions()) > 0:
-        log(owner)
+        if owner.last_event.updated():
+            log(owner)
 
     import matplotlib
     matplotlib.use('Agg')
