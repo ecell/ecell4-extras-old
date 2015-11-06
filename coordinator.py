@@ -23,14 +23,8 @@ class SimulatorEvent:
     def next_time(self):
         return self.sim.next_time()
 
-    def t(self):
-        return self.sim.t()
-
     def num_steps(self):
         return self.sim.num_steps()
-
-    def step(self):
-        self.sim.step()
 
     def __call__(self, rhs):
         return adapter(self.sim, rhs)
@@ -53,6 +47,38 @@ class SimulatorEvent:
                 self.sim.initialize()
                 return True
         return False
+
+class DiscreteEvent(SimulatorEvent):
+
+    def __init__(self, sim):
+        SimulatorEvent.__init__(self, sim)
+
+    def next_time(self):
+        return self.sim.next_time()
+
+    def t(self):
+        return self.sim.t()
+
+    def step(self):
+        self.sim.step()
+
+class DiscreteTimeEvent(SimulatorEvent):
+
+    def __init__(self, sim, dt):
+        SimulatorEvent.__init__(self, sim)
+        self.__t = 0.0
+        self.__dt = dt
+        self.__num_steps = 0
+
+    def next_time(self):
+        return self.__t + self.__dt * (self.__num_steps + 1)
+
+    def t(self):
+        return self.__t
+
+    def step(self):
+        assert self.sim.t() <= self.next_time()
+        self.sim.step(self.next_time())
 
 class GillespieWorldAdapter:
 
@@ -113,10 +139,10 @@ class GillespieSimulatorAdapter(SimulatorAdapter):
     def world(self):
         return GillespieWorldAdapter(self.lhs.world(), self.rhs.world())
 
-class GillespieEvent(SimulatorEvent):
+class GillespieEvent(DiscreteEvent):
 
     def __init__(self, sim):
-        SimulatorEvent.__init__(self, sim)
+        DiscreteEvent.__init__(self, sim)
 
     def sync(self):
         last_reactions = self.sim.last_reactions()
@@ -212,10 +238,10 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
     # def world(self):
     #     return MesoscopicWorldAdapter(self.lhs.world(), self.rhs.world())
 
-class MesoscopicEvent(SimulatorEvent):
+class MesoscopicEvent(DiscreteEvent):
 
     def __init__(self, sim):
-        SimulatorEvent.__init__(self, sim)
+        DiscreteEvent.__init__(self, sim)
 
     def sync(self):
         last_reactions = self.sim.last_reactions()
@@ -312,10 +338,10 @@ class SpatiocyteSimulatorAdapter(SimulatorAdapter):
     # def world(self):
     #     return SpatiocyteWorldAdapter(self.lhs.world(), self.rhs.world())
 
-class SpatiocyteEvent(SimulatorEvent):
+class SpatiocyteEvent(DiscreteEvent):
 
     def __init__(self, sim):
-        SimulatorEvent.__init__(self, sim)
+        DiscreteEvent.__init__(self, sim)
 
     def sync(self):
         last_reactions = self.sim.last_reactions()
@@ -380,10 +406,10 @@ class EGFRDSimulatorAdapter(SimulatorAdapter):
             return self.lhs.last_reactions()
         raise ValueError("Not supported yet [{}].".format(repr(self.rhs)))
 
-class EGFRDEvent(SimulatorEvent):
+class EGFRDEvent(DiscreteEvent):
 
     def __init__(self, sim):
-        SimulatorEvent.__init__(self, sim)
+        DiscreteEvent.__init__(self, sim)
 
     def sync(self):
         last_reactions = self.sim.last_reactions()
