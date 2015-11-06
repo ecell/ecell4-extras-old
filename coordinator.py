@@ -80,6 +80,89 @@ class DiscreteTimeEvent(SimulatorEvent):
         assert self.sim.t() <= self.next_time()
         self.sim.step(self.next_time())
 
+class ODESimulatorAdapter(SimulatorAdapter):
+
+    def __init__(self, lhs, rhs, rng=GSLRandomNumberGenerator()):
+        SimulatorAdapter.__init__(self, lhs, rhs)
+        self.rng = rng
+        assert isinstance(self.lhs, ode.ODESimulator)
+
+    def generate_reactions(self):
+        retval = []
+        for sp in self.lhs.world().list_species():
+            if own(self.lhs, sp):
+                continue
+            value = self.lhs.world().get_value(sp)
+            if value >= 1.0:
+                ri = gillespie.ReactionInfo(self.lhs.t(), [], [sp])
+                for i in range(int(value)):
+                    retval.append(ri)
+        return retval
+
+    def last_reactions(self):
+        if isinstance(self.rhs, (ode.ODESimulator, gillespie.GillespieSimulator)):
+            return self.generate_reactions()
+        elif isinstance(self.rhs, meso.MesoscopicSimulator):
+            def convert(ri):
+                return meso.ReactionInfo(
+                    ri.t(), ri.reactants(), ri.products(),
+                    self.rng.uniform_int(
+                        0, self.rhs.world().num_subvolumes() - 1))
+            return [(rr, convert(ri)) for (rr, ri) in self.generate_reactions()]
+        elif isinstance(self.rhs, spatiocyte.SpatiocyteSimulator):
+            def convert(ri):
+                coord = self.rng.uniform_int(0, self.rhs.world().size() - 1)
+                reactants = [(ParticleID(), Voxel(sp, coord, 0, 0))
+                             for sp in ri.reactants()]
+                products = [(ParticleID(), Voxel(sp, coord, 0, 0))
+                             for sp in ri.products()]
+                return spatiocyte.ReactionInfo(ri.t(), reactants, products)
+            return [(rr, convert(ri)) for (rr, ri) in self.generate_reactions()]
+        elif isinstance(self.rhs, egfrd.EGFRDSimulator):
+            def convert(ri):
+                lengths = self.lhs.world().edge_lengths()
+                pos = Real3(self.rng.uniform(0, 1) * lengths[0],
+                            self.rng.uniform(0, 1) * lengths[1],
+                            self.rng.uniform(0, 1) * lengths[2])
+                reactants = [(ParticleID(), Particle(sp, pos, 0, 0))
+                             for sp in ri.reactants()]
+                products = [(ParticleID(), Particle(sp, pos, 0, 0))
+                             for sp in ri.products()]
+                return egfrd.ReactionInfo(ri.t(), reactants, products)
+            return [(rr, convert(ri)) for (rr, ri) in self.generate_reactions()]
+        raise ValueError("Not supported yet.")
+
+class ODEEvent(DiscreteTimeEvent):
+
+    def __init__(self, sim, dt):
+        DiscreteTimeEvent.__init__(self, sim, dt)
+
+    def sync(self):
+        dirty = False
+        for sp in self.sim.world().list_species():
+            if own(self.sim, sp):
+                continue
+            value = self.lhs.world().get_value(sp)
+            if value >= 1.0:
+                self.sim.world().set_value(value - floor(value))
+                dirty = True
+
+        if dirty:
+            self.sim.initialize()
+
+    def _interrupt(self, t, ri):
+        products = [sp for sp in ri.products() if own(self.sim, sp)]
+        if len(products) == 0:
+            return False
+        self.sim.step(t)
+        assert self.sim.t() == t
+        for sp in products:
+            self.sim.world().add_molecules(sp, 1)
+        return True
+
+    def __call__(self, rhs):
+        return ODESimulatorAdapter(self.sim, rhs)
+
 class GillespieWorldAdapter:
 
     def __init__(self, lhs, rhs):
@@ -103,7 +186,7 @@ class GillespieSimulatorAdapter(SimulatorAdapter):
         assert isinstance(self.lhs, gillespie.GillespieSimulator)
 
     def last_reactions(self):
-        if isinstance(self.rhs, gillespie.GillespieSimulator):
+        if isinstance(self.rhs, (ode.ODESimulator, gillespie.GillespieSimulator)):
             return self.lhs.last_reactions()
         elif isinstance(self.rhs, meso.MesoscopicSimulator):
             def convert(ri):
@@ -199,7 +282,7 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
     def last_reactions(self):
         if isinstance(self.rhs, meso.MesoscopicSimulator):
             return self.lhs.last_reactions()
-        elif isinstance(self.rhs, gillespie.GillespieSimulator):
+        elif isinstance(self.rhs, (ode.ODESimulator, gillespie.GillespieSimulator)):
             return [(rr, gillespie.ReactionInfo(ri.t(), ri.reactants(), ri.products()))
                     for (rr, ri) in self.lhs.last_reactions()]
         elif isinstance(self.rhs, spatiocyte.SpatiocyteSimulator):
@@ -310,7 +393,7 @@ class SpatiocyteSimulatorAdapter(SimulatorAdapter):
     def last_reactions(self):
         if isinstance(self.rhs, spatiocyte.SpatiocyteSimulator):
             return self.lhs.last_reactions()
-        elif isinstance(self.rhs, gillespie.GillespieSimulator):
+        elif isinstance(self.rhs, (ode.ODESimulator, gillespie.GillespieSimulator)):
             def convert(ri):
                 reactants = [v.species() for pid, v in ri.reactants()]
                 products = [v.species() for pid, v in ri.products()]
@@ -388,7 +471,7 @@ class EGFRDSimulatorAdapter(SimulatorAdapter):
                              for pid, v in ri.products()]
                 return spatiocyte.ReactionInfo(ri.t(), reactants, products)
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
-        elif isinstance(self.rhs, gillespie.GillespieSimulator):
+        elif isinstance(self.rhs, (ode.ODESimulator, gillespie.GillespieSimulator)):
             def convert(ri):
                 reactants = [p.species() for pid, p in ri.reactants()]
                 products = [p.species() for pid, p in ri.products()]
@@ -442,7 +525,9 @@ class EGFRDEvent(DiscreteEvent):
         return EGFRDSimulatorAdapter(self.sim, rhs)
 
 def adapter(lhs, rhs):
-    if isinstance(lhs, gillespie.GillespieSimulator):
+    if isinstance(lhs, ode.ODESimulator):
+        return ODESimulatorAdapter(lhs, rhs)
+    elif isinstance(lhs, gillespie.GillespieSimulator):
         return GillespieSimulatorAdapter(lhs, rhs)
     elif isinstance(lhs, meso.MesoscopicSimulator):
         return MesoscopicSimulatorAdapter(lhs, rhs)
@@ -461,6 +546,8 @@ def own(sim, sp):
         return isinstance(sim, spatiocyte.SpatiocyteSimulator)
     elif sp in (Species("D1"), Species("D2")):
         return isinstance(sim, egfrd.EGFRDSimulator)
+    elif sp in (Species("E1"), Species("E2")):
+        return isinstance(sim, ode.ODESimulator)
     raise ValueError("Unknown species [{}] was given".format(sp.serial()))
 
 class Coordinator:
