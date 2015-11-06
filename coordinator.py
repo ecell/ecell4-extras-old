@@ -1,27 +1,22 @@
 
 # coding: utf-8
 
-# In[40]:
-
-get_ipython().magic(u'matplotlib inline')
 import numpy
 from ecell4 import *
 
-
-# In[41]:
 
 D, radius = 1, 0.005
 edge_lengths = Real3(1, 1, 1)
 
 with species_attributes():
     A1 | A2 | B1 | B2 | C1 | C2 | D1 | D2 | {"D": str(D), "radius": str(radius)}
-    
+
 with reaction_rules():
     A1 == A2 | (1.0, 1.0)
     B1 == B2 | (1.0, 1.0)
     C1 == C2 | (1.0, 1.0)
     D1 == D2 | (1.0, 1.0)
-    
+
     A1 == B1 | (1.0, 1.0)
     B1 == C1 | (1.0, 1.0)
     C1 == A1 | (1.0, 1.0)
@@ -31,39 +26,24 @@ with reaction_rules():
 
 m = get_model()
 
-
-# In[42]:
-
 w1 = gillespie.GillespieWorld(edge_lengths)
 w1.bind_to(m)
 sim1 = gillespie.GillespieSimulator(w1)
-
-
-# In[43]:
 
 w2 = meso.MesoscopicWorld(edge_lengths, Integer3(9, 9, 9))
 w2.bind_to(m)
 sim2 = meso.MesoscopicSimulator(w2)
 
-
-# In[44]:
-
 w3 = spatiocyte.SpatiocyteWorld(edge_lengths, radius)
 w3.bind_to(m)
 sim3 = spatiocyte.SpatiocyteSimulator(w3)
-
-
-# In[45]:
 
 w4 = egfrd.EGFRDWorld(edge_lengths, Integer3(4, 4, 4))
 w4.bind_to(m)
 sim4 = egfrd.EGFRDSimulator(m, w4)
 
-
-# In[46]:
-
 class SimulatorAdapter:
-    
+
     def __init__(self, lhs, rhs):
         self.lhs = lhs
         self.rhs = rhs
@@ -72,19 +52,19 @@ class SimulatorAdapter:
         return getattr(self.lhs, name)
 
 class SimulatorEvent:
-    
+
     def __init__(self, sim):
         self.sim = sim
-    
+
     def initialize(self):
         self.sim.initialize()
-        
+
     def next_time(self):
         return self.sim.next_time()
-    
+
     def t(self):
         return self.sim.t()
-    
+
     def num_steps(self):
         return self.sim.num_steps()
 
@@ -93,7 +73,7 @@ class SimulatorEvent:
 
     def __call__(self, rhs):
         return adapter(self.sim, rhs)
-    
+
     def interrupt(self, t, interrupter):
         if interrupter is None:
             self.sim.step(t)
@@ -112,30 +92,28 @@ class SimulatorEvent:
         return False
 
 
-# In[47]:
-
 class GillespieWorldAdapter:
-    
+
     def __init__(self, lhs, rhs):
         self.lhs = lhs
         self.rhs = rhs
 
     def remove_molecules(self, sp, num, coord=None):
         self.lhs.remove_molecules(sp, num)
-    
+
     def remove_voxel(self, voxel):
         pid, v = voxel
         self.lhs.remove_molecules(v.species(), 1)
-        
+
     def __getattr__(self, name):
         return getattr(self.lhs, name)
 
 class GillespieSimulatorAdapter(SimulatorAdapter):
-    
+
     def __init__(self, lhs, rhs):
         SimulatorAdapter.__init__(self, lhs, rhs)
         assert isinstance(self.lhs, gillespie.GillespieSimulator)
-    
+
     def last_reactions(self):
         if isinstance(self.rhs, gillespie.GillespieSimulator):
             return self.lhs.last_reactions()
@@ -153,7 +131,7 @@ class GillespieSimulatorAdapter(SimulatorAdapter):
                              for sp in ri.reactants()]
                 products = [(ParticleID(), Voxel(sp, coord, 0, 0))
                              for sp in ri.products()]
-                return spatiocyte.ReactionInfo(ri.t(), reactants, products)                
+                return spatiocyte.ReactionInfo(ri.t(), reactants, products)
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
         elif isinstance(self.rhs, egfrd.EGFRDSimulator):
             def convert(ri):
@@ -166,15 +144,15 @@ class GillespieSimulatorAdapter(SimulatorAdapter):
                              for sp in ri.reactants()]
                 products = [(ParticleID(), Particle(sp, pos, 0, 0))
                              for sp in ri.products()]
-                return egfrd.ReactionInfo(ri.t(), reactants, products)                
+                return egfrd.ReactionInfo(ri.t(), reactants, products)
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
         raise ValueError("Not supported yet.")
 
     def world(self):
         return GillespieWorldAdapter(self.lhs.world(), self.rhs.world())
-    
+
 class GillespieEvent(SimulatorEvent):
-    
+
     def __init__(self, sim):
         SimulatorEvent.__init__(self, sim)
 
@@ -191,7 +169,7 @@ class GillespieEvent(SimulatorEvent):
                 continue
             dirty = True
             self.sim.world().remove_molecules(sp, 1)
-        
+
         if dirty:
             self.sim.initialize()
 
@@ -208,11 +186,8 @@ class GillespieEvent(SimulatorEvent):
     def __call__(self, rhs):
         return GillespieSimulatorAdapter(self.sim, rhs)
 
-
-# In[48]:
-
 class MesoscopicWorldAdapter:
-    
+
     def __init__(self, lhs, rhs):
         self.lhs = lhs
         self.rhs = rhs
@@ -223,16 +198,16 @@ class MesoscopicWorldAdapter:
         coord = self.lhs.position2coordinate(pos)
         assert self.lhs.num_molecules(v.species(), coord) > 0
         self.lhs.remove_molecules(v.species(), 1, coord)
-        
+
     def __getattr__(self, name):
         return getattr(self.lhs, name)
 
 class MesoscopicSimulatorAdapter(SimulatorAdapter):
-    
+
     def __init__(self, lhs, rhs):
         SimulatorAdapter.__init__(self, lhs, rhs)
         assert isinstance(self.lhs, meso.MesoscopicSimulator)
-    
+
     def last_reactions(self):
         if isinstance(self.rhs, meso.MesoscopicSimulator):
             return self.lhs.last_reactions()
@@ -268,7 +243,7 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
                              for sp in ri.reactants()]
                 products = [(ParticleID(), Particle(sp, pos, 0, 0))
                              for sp in ri.products()]
-                return egfrd.ReactionInfo(ri.t(), reactants, products)                
+                return egfrd.ReactionInfo(ri.t(), reactants, products)
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
         raise ValueError("Not supported yet [{}].".format(repr(self.rhs)))
 
@@ -276,7 +251,7 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
     #     return MesoscopicWorldAdapter(self.lhs.world(), self.rhs.world())
 
 class MesoscopicEvent(SimulatorEvent):
-    
+
     def __init__(self, sim):
         SimulatorEvent.__init__(self, sim)
 
@@ -294,7 +269,7 @@ class MesoscopicEvent(SimulatorEvent):
                 continue
             dirty = True
             self.sim.world().remove_molecules(sp, 1, coord)
-        
+
         if dirty:
             self.sim.initialize()
 
@@ -312,11 +287,8 @@ class MesoscopicEvent(SimulatorEvent):
     def __call__(self, rhs):
         return MesoscopicSimulatorAdapter(self.sim, rhs)
 
-
-# In[49]:
-
 class SpatiocyteWorldAdapter:
-    
+
     def __init__(self, lhs, rhs):
         self.lhs = lhs
         self.rhs = rhs
@@ -342,11 +314,11 @@ class SpatiocyteWorldAdapter:
         return getattr(self.lhs, name)
 
 class SpatiocyteSimulatorAdapter(SimulatorAdapter):
-    
+
     def __init__(self, lhs, rhs):
         SimulatorAdapter.__init__(self, lhs, rhs)
         assert isinstance(self.lhs, spatiocyte.SpatiocyteSimulator)
-    
+
     def last_reactions(self):
         if isinstance(self.rhs, spatiocyte.SpatiocyteSimulator):
             return self.lhs.last_reactions()
@@ -364,22 +336,22 @@ class SpatiocyteSimulatorAdapter(SimulatorAdapter):
                 pos = self.lhs.world().coordinate2position(ri.products()[0][1].coordinate())
                 coord = self.rhs.world().position2coordinate(pos)
                 return meso.ReactionInfo(ri.t(), reactants, products, coord)
-            return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]            
+            return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
         elif isinstance(self.rhs, egfrd.EGFRDSimulator):
             def convert(ri):
                 reactants = [(pid, Particle(v.species(), self.lhs.world().coordinate2position(v.coordinate()), v.radius(), v.D()))
                               for pid, v in ri.reactants()]
                 products = [(pid, Particle(v.species(), self.lhs.world().coordinate2position(v.coordinate()), v.radius(), v.D()))
                              for pid, v in ri.products()]
-                return egfrd.ReactionInfo(ri.t(), reactants, products)                
+                return egfrd.ReactionInfo(ri.t(), reactants, products)
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
         raise ValueError("Not supported yet [{}].".format(repr(self.rhs)))
-    
+
     # def world(self):
     #     return SpatiocyteWorldAdapter(self.lhs.world(), self.rhs.world())
 
 class SpatiocyteEvent(SimulatorEvent):
-    
+
     def __init__(self, sim):
         SimulatorEvent.__init__(self, sim)
 
@@ -396,7 +368,7 @@ class SpatiocyteEvent(SimulatorEvent):
                 continue
             dirty = True
             self.sim.world().remove_voxel(pid)
-        
+
         if dirty:
             self.sim.initialize()
 
@@ -407,21 +379,18 @@ class SpatiocyteEvent(SimulatorEvent):
         self.sim.step(t)
         assert self.sim.t() == t
         for pid, v in products:
-            self.sim.world().new_voxel(v.species(), v.coordinate())        
+            self.sim.world().new_voxel(v.species(), v.coordinate())
         return True
 
     def __call__(self, rhs):
         return SpatiocyteSimulatorAdapter(self.sim, rhs)
 
-
-# In[50]:
-
 class EGFRDSimulatorAdapter(SimulatorAdapter):
-    
+
     def __init__(self, lhs, rhs):
         SimulatorAdapter.__init__(self, lhs, rhs)
         assert isinstance(self.lhs, egfrd.EGFRDSimulator)
-    
+
     def last_reactions(self):
         if isinstance(self.rhs, spatiocyte.SpatiocyteSimulator):
             def convert(ri):
@@ -450,7 +419,7 @@ class EGFRDSimulatorAdapter(SimulatorAdapter):
         raise ValueError("Not supported yet [{}].".format(repr(self.rhs)))
 
 class EGFRDEvent(SimulatorEvent):
-    
+
     def __init__(self, sim):
         SimulatorEvent.__init__(self, sim)
 
@@ -467,10 +436,10 @@ class EGFRDEvent(SimulatorEvent):
                 continue
             dirty = True
             self.sim.world().remove_particle(pid)
-        
+
         if dirty:
             self.sim.initialize()
-    
+
     def _interrupt(self, t, ri):
         products = [(pid, p) for pid, p in ri.products() if own(self.sim, p.species())]
         if len(products) == 0:
@@ -478,14 +447,11 @@ class EGFRDEvent(SimulatorEvent):
         self.sim.step(t)
         assert self.sim.t() == t
         for pid, p in products:
-            self.sim.world().new_particle(p.species(), p.position())        
+            self.sim.world().new_particle(p.species(), p.position())
         return True
 
     def __call__(self, rhs):
         return EGFRDSimulatorAdapter(self.sim, rhs)
-
-
-# In[51]:
 
 def adapter(lhs, rhs):
     if isinstance(lhs, gillespie.GillespieSimulator):
@@ -498,9 +464,6 @@ def adapter(lhs, rhs):
         return EGFRDSimulatorAdapter(lhs, rhs)
     raise ValueError("{} not supported".format(repr(lhs)))
 
-
-# In[52]:
-
 def own(sim, sp):
     if sp in (Species("A1"), Species("A2")):
         return isinstance(sim, gillespie.GillespieSimulator)
@@ -512,16 +475,13 @@ def own(sim, sp):
         return isinstance(sim, egfrd.EGFRDSimulator)
     raise ValueError("Unknown species [{}] was given".format(sp.serial()))
 
-
-# In[53]:
-
 class Coordinator:
-    
+
     def __init__(self):
         self.events = []
         self.num_steps = 0
         self.last_event = None
-    
+
     def add_simulator(self, sim):
         if isinstance(sim, gillespie.GillespieSimulator):
             ev = GillespieEvent(sim)
@@ -535,15 +495,15 @@ class Coordinator:
             raise ValueError("{} not supported.".format(repr(sim)))
 
         self.add_event(ev)
-        
+
     def add_event(self, ev):
         self.events.append(ev)
-    
+
     def initialize(self):
         for ev in self.events:
             ev.initialize()
         self.last_event = None
-    
+
     def get_next_event(self):
         idx = 0
         ntime = self.events[idx].next_time()
@@ -551,7 +511,7 @@ class Coordinator:
             if ev.next_time() < ntime:
                 (idx, ntime) = (i + 1, ev.next_time())
         return (idx, ntime)
-    
+
     def interrupt_all(self, t, interrupter=None, ignore=()):
         for i, ev in enumerate(self.events):
             if i in ignore:
@@ -566,15 +526,15 @@ class Coordinator:
         if upto is None:
             self._step()
             return False
-        
+
         idx, ntime = self.get_next_event()
         if ntime > upto:
             self.interrupt_all(upto, None)
             return False
-        
+
         self._step()
         return True
-        
+
     def _step(self):
         if len(self.events) == 0:
             return
@@ -583,13 +543,10 @@ class Coordinator:
         self.last_event = self.events[idx]
         self.last_event.step()
         assert self.last_event.t() == ntime
-        
+
         self.interrupt_all(ntime, self.last_event.sim, (idx, ))
 
         self.last_event.sync()  #XXX: under development
-
-
-# In[54]:
 
 w1.add_molecules(Species("A1"), 240)
 # w1.add_molecules(Species("A1"), 60)
@@ -597,18 +554,12 @@ w1.add_molecules(Species("A1"), 240)
 # w3.add_molecules(Species("C1"), 60)
 # w4.add_molecules(Species("D1"), 60)
 
-
-# In[55]:
-
 owner = Coordinator()
 owner.add_simulator(sim1)
 owner.add_simulator(sim2)
 owner.add_simulator(sim3)
 owner.add_simulator(sim4)
 owner.initialize()
-
-
-# In[56]:
 
 data = []
 def log(owner):
@@ -624,38 +575,21 @@ def log(owner):
         owner.events[3].sim.world().num_molecules_exact(Species("D2")),
         ))
 
-
-# In[57]:
-
 while owner.step(3):
     if len(owner.last_event.sim.last_reactions()) > 0:
         log(owner)
 
-
-# In[58]:
-
-# run_simulation(numpy.linspace(0, 5, 101), model=m, y0={"A1": 60, "B1": 60, "C1": 60, "D1": 60})
-# run_simulation(numpy.linspace(0, 5, 101), model=m, y0={"A1": 240})
-
-
-# In[59]:
-
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pylab as plt
+
 data = numpy.asarray(data)
 for i in range(1, 9):
     plt.plot(data.T[0], data.T[i], '-')
-plt.show()
-
-
-# In[60]:
+# plt.show()
+plt.savefig('result.eps')
 
 for ev in owner.events:
     print('=> {}, {}'.format(ev.t(), ev.num_steps()))
     print([ev.sim.world().num_molecules_exact(Species(name))
            for name in ("A1", "A2", "B1", "B2", "C1", "C2", "D1", "D2", "C1_")])
-
-
-# In[ ]:
-
-
-
