@@ -1,6 +1,6 @@
-
 # coding: utf-8
 
+import math
 from ecell4 import *
 
 class SimulatorAdapter:
@@ -20,14 +20,11 @@ class SimulatorEvent:
     def initialize(self):
         self.sim.initialize()
 
-    def next_time(self):
-        return self.sim.next_time()
+    def t(self):
+        return self.sim.t()
 
     def num_steps(self):
         return self.sim.num_steps()
-
-    def __call__(self, rhs):
-        return adapter(self.sim, rhs)
 
     def interrupt(self, t, interrupter):
         if interrupter is None:
@@ -35,17 +32,14 @@ class SimulatorEvent:
             assert self.sim.t() == t
             return True
 
-        assert self.sim != interrupter
-
-        if len(interrupter.last_reactions()) > 0:
-            last_reactions = adapter(interrupter, self.sim).last_reactions()
-            dirty = False
-            for rr in last_reactions:
-                if self._interrupt(t, rr[1]):
-                    dirty = True
-            if dirty:
-                self.sim.initialize()
-                return True
+        last_reactions = interrupter(self.sim).last_reactions()
+        dirty = False
+        for rr in last_reactions:
+            if self._interrupt(t, rr[1]):
+                dirty = True
+        if dirty:
+            self.sim.initialize()
+            return True
         return False
 
 class DiscreteEvent(SimulatorEvent):
@@ -55,9 +49,6 @@ class DiscreteEvent(SimulatorEvent):
 
     def next_time(self):
         return self.sim.next_time()
-
-    def t(self):
-        return self.sim.t()
 
     def step(self):
         self.sim.step()
@@ -73,12 +64,10 @@ class DiscreteTimeEvent(SimulatorEvent):
     def next_time(self):
         return self.__t + self.__dt * (self.__num_steps + 1)
 
-    def t(self):
-        return self.__t
-
     def step(self):
         assert self.sim.t() <= self.next_time()
         self.sim.step(self.next_time())
+        self.__num_steps += 1
 
 class ODESimulatorAdapter(SimulatorAdapter):
 
@@ -92,11 +81,12 @@ class ODESimulatorAdapter(SimulatorAdapter):
         for sp in self.lhs.world().list_species():
             if own(self.lhs, sp):
                 continue
-            value = self.lhs.world().get_value(sp)
+            value = self.lhs.world().get_value_exact(sp)
             if value >= 1.0:
+                rr = ReactionRule([], [sp], 0.0)
                 ri = gillespie.ReactionInfo(self.lhs.t(), [], [sp])
                 for i in range(int(value)):
-                    retval.append(ri)
+                    retval.append((rr, ri))
         return retval
 
     def last_reactions(self):
@@ -134,7 +124,7 @@ class ODESimulatorAdapter(SimulatorAdapter):
 
 class ODEEvent(DiscreteTimeEvent):
 
-    def __init__(self, sim, dt):
+    def __init__(self, sim, dt=1.0):
         DiscreteTimeEvent.__init__(self, sim, dt)
 
     def sync(self):
@@ -142,9 +132,9 @@ class ODEEvent(DiscreteTimeEvent):
         for sp in self.sim.world().list_species():
             if own(self.sim, sp):
                 continue
-            value = self.lhs.world().get_value(sp)
+            value = self.sim.world().get_value_exact(sp)
             if value >= 1.0:
-                self.sim.world().set_value(value - floor(value))
+                self.sim.world().set_value(sp, value - math.floor(value))
                 dirty = True
 
         if dirty:
@@ -154,6 +144,7 @@ class ODEEvent(DiscreteTimeEvent):
         products = [sp for sp in ri.products() if own(self.sim, sp)]
         if len(products) == 0:
             return False
+        print(t, [sp.serial() for sp in products])
         self.sim.step(t)
         assert self.sim.t() == t
         for sp in products:
@@ -161,6 +152,7 @@ class ODEEvent(DiscreteTimeEvent):
         return True
 
     def __call__(self, rhs):
+        assert self.sim != rhs
         return ODESimulatorAdapter(self.sim, rhs)
 
 class GillespieWorldAdapter:
@@ -255,6 +247,7 @@ class GillespieEvent(DiscreteEvent):
         return True
 
     def __call__(self, rhs):
+        assert self.sim != rhs
         return GillespieSimulatorAdapter(self.sim, rhs)
 
 class MesoscopicWorldAdapter:
@@ -356,6 +349,7 @@ class MesoscopicEvent(DiscreteEvent):
         return True
 
     def __call__(self, rhs):
+        assert self.sim != rhs
         return MesoscopicSimulatorAdapter(self.sim, rhs)
 
 class SpatiocyteWorldAdapter:
@@ -454,6 +448,7 @@ class SpatiocyteEvent(DiscreteEvent):
         return True
 
     def __call__(self, rhs):
+        assert self.sim != rhs
         return SpatiocyteSimulatorAdapter(self.sim, rhs)
 
 class EGFRDSimulatorAdapter(SimulatorAdapter):
@@ -522,20 +517,8 @@ class EGFRDEvent(DiscreteEvent):
         return True
 
     def __call__(self, rhs):
+        assert self.sim != rhs
         return EGFRDSimulatorAdapter(self.sim, rhs)
-
-def adapter(lhs, rhs):
-    if isinstance(lhs, ode.ODESimulator):
-        return ODESimulatorAdapter(lhs, rhs)
-    elif isinstance(lhs, gillespie.GillespieSimulator):
-        return GillespieSimulatorAdapter(lhs, rhs)
-    elif isinstance(lhs, meso.MesoscopicSimulator):
-        return MesoscopicSimulatorAdapter(lhs, rhs)
-    elif isinstance(lhs, spatiocyte.SpatiocyteSimulator):
-        return SpatiocyteSimulatorAdapter(lhs, rhs)
-    elif isinstance(lhs, egfrd.EGFRDSimulator):
-        return EGFRDSimulatorAdapter(lhs, rhs)
-    raise ValueError("{} not supported".format(repr(lhs)))
 
 def own(sim, sp):
     if sp in (Species("A1"), Species("A2")):
@@ -558,7 +541,9 @@ class Coordinator:
         self.last_event = None
 
     def add_simulator(self, sim):
-        if isinstance(sim, gillespie.GillespieSimulator):
+        if isinstance(sim, ode.ODESimulator):
+            ev = ODEEvent(sim)
+        elif isinstance(sim, gillespie.GillespieSimulator):
             ev = GillespieEvent(sim)
         elif isinstance(sim, meso.MesoscopicSimulator):
             ev = MesoscopicEvent(sim)
@@ -592,7 +577,7 @@ class Coordinator:
             if i in ignore:
                 continue
             if ev.interrupt(t, interrupter):
-                self.interrupt_all(t, ev.sim, (i, ))
+                self.interrupt_all(t, ev, (i, ))
 
     def step(self, upto=None):
         self.num_steps += 1
@@ -619,6 +604,6 @@ class Coordinator:
         self.last_event.step()
         assert self.last_event.t() == ntime
 
-        self.interrupt_all(ntime, self.last_event.sim, (idx, ))
+        self.interrupt_all(ntime, self.last_event, (idx, ))
 
         self.last_event.sync()  #XXX: under development
