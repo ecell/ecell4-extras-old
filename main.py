@@ -78,14 +78,14 @@ def test1():
     def log(owner):
         data.append((
             owner.t(),
-            owner.events[0].sim.world().num_molecules_exact(Species("A1")),
-            owner.events[0].sim.world().num_molecules_exact(Species("A2")),
-            owner.events[1].sim.world().num_molecules_exact(Species("B1")),
-            owner.events[1].sim.world().num_molecules_exact(Species("B2")),
-            owner.events[2].sim.world().num_molecules_exact(Species("C1")),
-            owner.events[2].sim.world().num_molecules_exact(Species("C2")),
-            owner.events[3].sim.world().num_molecules_exact(Species("D1")),
-            owner.events[3].sim.world().num_molecules_exact(Species("D2")),
+            owner.events[0].sim.world().get_value_exact(Species("A1")),
+            owner.events[0].sim.world().get_value_exact(Species("A2")),
+            owner.events[1].sim.world().get_value_exact(Species("B1")),
+            owner.events[1].sim.world().get_value_exact(Species("B2")),
+            owner.events[2].sim.world().get_value_exact(Species("C1")),
+            owner.events[2].sim.world().get_value_exact(Species("C2")),
+            owner.events[3].sim.world().get_value_exact(Species("D1")),
+            owner.events[3].sim.world().get_value_exact(Species("D2")),
             owner.events[4].sim.world().get_value_exact(Species("E1")),
             owner.events[4].sim.world().get_value_exact(Species("E2")),
             ))
@@ -143,8 +143,8 @@ def test2():
     def log(owner):
         data.append((
             owner.t(),
-            owner.events[0].sim.world().num_molecules_exact(Species("A1")),
-            owner.events[0].sim.world().num_molecules_exact(Species("A2")),
+            owner.events[0].sim.world().get_value_exact(Species("A1")),
+            owner.events[0].sim.world().get_value_exact(Species("A2")),
             owner.events[1].sim.world().get_value_exact(Species("E1")),
             owner.events[1].sim.world().get_value_exact(Species("E2")),
             owner.events[1].sim.world().get_value_exact(Species("A1")),
