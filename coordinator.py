@@ -71,34 +71,22 @@ class DiscreteTimeEvent(SimulatorEvent):
 
 class ODESimulatorAdapter(SimulatorAdapter):
 
-    def __init__(self, lhs, rhs, rng=GSLRandomNumberGenerator()):
+    def __init__(self, lhs, rhs, last_reactions=[], rng=GSLRandomNumberGenerator()):
         SimulatorAdapter.__init__(self, lhs, rhs)
         self.rng = rng
+        self.__last_reactions = last_reactions
         assert isinstance(self.lhs, ode.ODESimulator)
-
-    def generate_reactions(self):
-        retval = []
-        for sp in self.lhs.world().list_species():
-            if own(self.lhs, sp):
-                continue
-            value = self.lhs.world().get_value_exact(sp)
-            if value >= 1.0:
-                rr = ReactionRule([], [sp], 0.0)
-                ri = gillespie.ReactionInfo(self.lhs.t(), [], [sp])
-                for i in range(int(value)):
-                    retval.append((rr, ri))
-        return retval
 
     def last_reactions(self):
         if isinstance(self.rhs, (ode.ODESimulator, gillespie.GillespieSimulator)):
-            return self.generate_reactions()
+            return self.__last_reactions
         elif isinstance(self.rhs, meso.MesoscopicSimulator):
             def convert(ri):
                 return meso.ReactionInfo(
                     ri.t(), ri.reactants(), ri.products(),
                     self.rng.uniform_int(
                         0, self.rhs.world().num_subvolumes() - 1))
-            return [(rr, convert(ri)) for (rr, ri) in self.generate_reactions()]
+            return [(rr, convert(ri)) for (rr, ri) in self.__last_reactions]
         elif isinstance(self.rhs, spatiocyte.SpatiocyteSimulator):
             def convert(ri):
                 coord = self.rng.uniform_int(0, self.rhs.world().size() - 1)
@@ -107,7 +95,7 @@ class ODESimulatorAdapter(SimulatorAdapter):
                 products = [(ParticleID(), Voxel(sp, coord, 0, 0))
                              for sp in ri.products()]
                 return spatiocyte.ReactionInfo(ri.t(), reactants, products)
-            return [(rr, convert(ri)) for (rr, ri) in self.generate_reactions()]
+            return [(rr, convert(ri)) for (rr, ri) in self.__last_reactions]
         elif isinstance(self.rhs, egfrd.EGFRDSimulator):
             def convert(ri):
                 lengths = self.lhs.world().edge_lengths()
@@ -119,15 +107,22 @@ class ODESimulatorAdapter(SimulatorAdapter):
                 products = [(ParticleID(), Particle(sp, pos, 0, 0))
                              for sp in ri.products()]
                 return egfrd.ReactionInfo(ri.t(), reactants, products)
-            return [(rr, convert(ri)) for (rr, ri) in self.generate_reactions()]
+            return [(rr, convert(ri)) for (rr, ri) in self.__last_reactions]
         raise ValueError("Not supported yet.")
 
 class ODEEvent(DiscreteTimeEvent):
 
     def __init__(self, sim, dt=1.0):
         DiscreteTimeEvent.__init__(self, sim, dt)
+        self.__last_reactions = []
+
+    def step(self):
+        DiscreteTimeEvent.step(self)
+        self.__last_reactions = self.generate_reactions()
 
     def sync(self):
+        self.__last_reactions = []
+
         dirty = False
         for sp in self.sim.world().list_species():
             if own(self.sim, sp):
@@ -144,7 +139,6 @@ class ODEEvent(DiscreteTimeEvent):
         products = [sp for sp in ri.products() if own(self.sim, sp)]
         if len(products) == 0:
             return False
-        print(t, [sp.serial() for sp in products])
         self.sim.step(t)
         assert self.sim.t() == t
         for sp in products:
@@ -153,7 +147,20 @@ class ODEEvent(DiscreteTimeEvent):
 
     def __call__(self, rhs):
         assert self.sim != rhs
-        return ODESimulatorAdapter(self.sim, rhs)
+        return ODESimulatorAdapter(self.sim, rhs, self.__last_reactions)
+
+    def generate_reactions(self):
+        retval = []
+        for sp in self.sim.world().list_species():
+            if own(self.sim, sp):
+                continue
+            value = self.sim.world().get_value_exact(sp)
+            if value >= 1.0:
+                rr = ReactionRule([], [sp], 0.0)
+                ri = gillespie.ReactionInfo(self.sim.t(), [], [sp])
+                for i in range(int(value)):
+                    retval.append((rr, ri))
+        return retval
 
 class GillespieWorldAdapter:
 
