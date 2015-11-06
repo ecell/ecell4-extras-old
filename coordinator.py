@@ -1,6 +1,7 @@
 # coding: utf-8
 
 import math
+import collections
 from ecell4 import *
 
 class SimulatorAdapter:
@@ -16,6 +17,22 @@ class SimulatorEvent:
 
     def __init__(self, sim):
         self.sim = sim
+        self.__species = set()
+
+    def register_species(self, value):
+        if isinstance(value, Species):
+            self.__species.add(value)
+        elif isinstance(value, str):
+            self.__species.add(Species(value))
+        elif isinstance(value, collections.Iterable):
+            for sp in value:
+                self.register_species(sp)
+        else:
+            raise ValueError(
+                'an invalid argument [{}] was given.'.format(repr(value)))
+
+    def own(self, sp):
+        return (sp in self.__species)
 
     def initialize(self):
         self.sim.initialize()
@@ -132,7 +149,7 @@ class ODEEvent(DiscreteTimeEvent):
 
         dirty = False
         for sp in self.sim.world().list_species():
-            if own(self.sim, sp):
+            if self.own(sp):
                 continue
             value = self.sim.world().get_value_exact(sp)
             if value >= 1.0:
@@ -143,7 +160,7 @@ class ODEEvent(DiscreteTimeEvent):
             self.sim.initialize()
 
     def _interrupt(self, t, ri):
-        products = [sp for sp in ri.products() if own(self.sim, sp)]
+        products = [sp for sp in ri.products() if self.own(sp)]
         if len(products) == 0:
             return False
         self.sim.step(t)
@@ -159,7 +176,7 @@ class ODEEvent(DiscreteTimeEvent):
     def generate_reactions(self):
         retval = []
         for sp in self.sim.world().list_species():
-            if own(self.sim, sp):
+            if self.own(sp):
                 continue
             value = self.sim.world().get_value_exact(sp)
             if value >= 1.0:
@@ -245,7 +262,7 @@ class GillespieEvent(DiscreteEvent):
 
         dirty = False
         for sp in ri.products():
-            if own(self.sim, sp):
+            if self.own(sp):
                 continue
             dirty = True
             self.sim.world().remove_molecules(sp, 1)
@@ -254,7 +271,7 @@ class GillespieEvent(DiscreteEvent):
             self.sim.initialize()
 
     def _interrupt(self, t, ri):
-        products = [sp for sp in ri.products() if own(self.sim, sp)]
+        products = [sp for sp in ri.products() if self.own(sp)]
         if len(products) == 0:
             return False
         self.sim.step(t)
@@ -346,7 +363,7 @@ class MesoscopicEvent(DiscreteEvent):
 
         dirty = False
         for sp in ri.products():
-            if own(self.sim, sp):
+            if self.own(sp):
                 continue
             dirty = True
             self.sim.world().remove_molecules(sp, 1, coord)
@@ -355,7 +372,7 @@ class MesoscopicEvent(DiscreteEvent):
             self.sim.initialize()
 
     def _interrupt(self, t, ri):
-        products = [sp for sp in ri.products() if own(self.sim, sp)]
+        products = [sp for sp in ri.products() if self.own(sp)]
         if len(products) == 0:
             return False
         coord = ri.coordinate()
@@ -446,7 +463,7 @@ class SpatiocyteEvent(DiscreteEvent):
 
         dirty = False
         for pid, v in ri.products():
-            if own(self.sim, v.species()):
+            if self.own(v.species()):
                 continue
             dirty = True
             self.sim.world().remove_voxel(pid)
@@ -455,7 +472,7 @@ class SpatiocyteEvent(DiscreteEvent):
             self.sim.initialize()
 
     def _interrupt(self, t, ri):
-        products = [(pid, v) for pid, v in ri.products() if own(self.sim, v.species())]
+        products = [(pid, v) for pid, v in ri.products() if self.own(v.species())]
         if len(products) == 0:
             return False
         self.sim.step(t)
@@ -515,7 +532,7 @@ class EGFRDEvent(DiscreteEvent):
 
         dirty = False
         for pid, p in ri.products():
-            if own(self.sim, p.species()):
+            if self.own(p.species()):
                 continue
             dirty = True
             self.sim.world().remove_particle(pid)
@@ -524,7 +541,7 @@ class EGFRDEvent(DiscreteEvent):
             self.sim.initialize()
 
     def _interrupt(self, t, ri):
-        products = [(pid, p) for pid, p in ri.products() if own(self.sim, p.species())]
+        products = [(pid, p) for pid, p in ri.products() if self.own(p.species())]
         if len(products) == 0:
             return False
         self.sim.step(t)
@@ -536,19 +553,6 @@ class EGFRDEvent(DiscreteEvent):
     def __call__(self, rhs):
         assert self.sim != rhs
         return EGFRDSimulatorAdapter(self.sim, rhs)
-
-def own(sim, sp):
-    if sp in (Species("A1"), Species("A2")):
-        return isinstance(sim, gillespie.GillespieSimulator)
-    elif sp in (Species("B1"), Species("B2")):
-        return isinstance(sim, meso.MesoscopicSimulator)
-    elif sp in (Species("C1"), Species("C2")):
-        return isinstance(sim, spatiocyte.SpatiocyteSimulator)
-    elif sp in (Species("D1"), Species("D2")):
-        return isinstance(sim, egfrd.EGFRDSimulator)
-    elif sp in (Species("E1"), Species("E2")):
-        return isinstance(sim, ode.ODESimulator)
-    raise ValueError("Unknown species [{}] was given".format(sp.serial()))
 
 class Coordinator:
 
@@ -576,9 +580,11 @@ class Coordinator:
             raise ValueError("{} not supported.".format(repr(sim)))
 
         self.add_event(ev)
+        return ev
 
     def add_event(self, ev):
         self.events.append(ev)
+        return ev
 
     def initialize(self):
         for ev in self.events:

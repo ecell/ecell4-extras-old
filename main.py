@@ -66,11 +66,11 @@ def test1():
     # w5.add_molecules(Species("E1"), 60)
 
     owner = coordinator.Coordinator()
-    owner.add_simulator(sim1)
-    owner.add_simulator(sim2)
-    owner.add_simulator(sim3)
-    owner.add_simulator(sim4)
-    owner.add_event(coordinator.ODEEvent(sim5, 0.01))
+    owner.add_simulator(sim1).register_species(('A1', 'A2'))
+    owner.add_simulator(sim2).register_species(('B1', 'B2'))
+    owner.add_simulator(sim3).register_species(('C1', 'C2'))
+    owner.add_simulator(sim4).register_species(('D1', 'D2'))
+    owner.add_event(coordinator.ODEEvent(sim5, 0.01)).register_species(('E1', 'E2'))
     owner.initialize()
 
     data = []
@@ -134,8 +134,8 @@ def test2():
     # w2.add_molecules(Species("E1"), 60)
 
     owner = coordinator.Coordinator()
-    owner.add_simulator(sim1)
-    owner.add_event(coordinator.ODEEvent(sim2, 0.01))
+    owner.add_simulator(sim1).register_species(('A1', 'A2'))
+    owner.add_event(coordinator.ODEEvent(sim2, 0.01)).register_species(('E1', 'E2'))
     owner.initialize()
 
     data = []
