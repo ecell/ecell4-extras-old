@@ -45,13 +45,14 @@ class SimulatorEvent:
 
         if len(interrupter.last_reactions()) > 0:
             last_reactions = adapter(interrupter, self.sim).last_reactions()
-            assert len(last_reactions) == 1
-            ri = last_reactions[0][1]
-            if self._interrupt(t, ri):
+            dirty = False
+            for rr in last_reactions:
+                if self._interrupt(t, rr[1]):
+                    dirty = True
+            if dirty:
                 self.sim.initialize()
                 return True
         return False
-
 
 class GillespieWorldAdapter:
 
