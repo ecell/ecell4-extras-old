@@ -554,8 +554,12 @@ class Coordinator:
 
     def __init__(self):
         self.events = []
+        self.__t = 0.0
         self.num_steps = 0
         self.last_event = None
+
+    def t(self):
+        return self.__t
 
     def add_simulator(self, sim):
         if isinstance(sim, ode.ODESimulator):
@@ -606,6 +610,7 @@ class Coordinator:
 
         idx, ntime = self.get_next_event()
         if ntime > upto:
+            self.__t = upto
             self.interrupt_all(upto, None)
             return False
 
@@ -620,6 +625,7 @@ class Coordinator:
         self.last_event = self.events[idx]
         self.last_event.step()
         assert self.last_event.t() == ntime
+        self.__t = ntime
 
         self.interrupt_all(ntime, self.last_event, (idx, ))
 
