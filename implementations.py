@@ -3,7 +3,9 @@
 import math
 import collections
 from coordinator import SimulatorAdapter, DiscreteEvent, DiscreteTimeEvent
-from ecell4 import *
+# from ecell4 import *
+from ecell4.core import Real3, Integer3, Species, ReactionRule, GSLRandomNumberGenerator, ParticleID, Voxel, Particle
+from ecell4 import gillespie, meso, spatiocyte, egfrd, ode
 
 
 def simulator_event(sim):
@@ -62,7 +64,9 @@ class ODESimulatorAdapter(SimulatorAdapter):
 
 class ODEEvent(DiscreteTimeEvent):
 
-    def __init__(self, sim, dt=1.0):
+    def __init__(self, sim, dt=None):
+        if dt is None:
+            dt = sim.dt()
         DiscreteTimeEvent.__init__(self, sim, dt)
         self.__last_reactions = []
 
@@ -171,8 +175,8 @@ class GillespieSimulatorAdapter(SimulatorAdapter):
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
         raise ValueError("Not supported yet.")
 
-    def world(self):
-        return GillespieWorldAdapter(self.lhs.world(), self.rhs.world())
+    # def world(self):
+    #     return GillespieWorldAdapter(self.lhs.world(), self.rhs.world())
 
 class GillespieEvent(DiscreteEvent):
 
