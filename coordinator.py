@@ -11,8 +11,8 @@ class SimulatorAdapter:
         self.lhs = lhs
         self.rhs = rhs
 
-    def __getattr__(self, name):
-        return getattr(self.lhs, name)
+    # def __getattr__(self, name):
+    #     return getattr(self.lhs, name)
 
 class SimulatorEvent:
 
@@ -73,7 +73,7 @@ class SimulatorEvent:
                 dirty = True
 
         if interrupter.updated():
-            last_reactions = interrupter(self.sim).last_reactions()
+            last_reactions = interrupter(self).last_reactions()
             for rr in last_reactions:
                 if self._interrupt(t, rr[1]):
                     dirty = True
@@ -86,6 +86,12 @@ class SimulatorEvent:
         return True
 
     def _mirror(self, interrupter, src, dst):
+        raise RuntimeError('Not implemented yet [{}].'.format(repr(self)))
+
+    def _interrupt(self, t, ri):
+        raise RuntimeError('Not implemented yet [{}].'.format(repr(self)))
+
+    def __call__(self, rhs):
         raise RuntimeError('Not implemented yet [{}].'.format(repr(self)))
 
 class DiscreteEvent(SimulatorEvent):

@@ -27,30 +27,30 @@ class ODESimulatorAdapter(SimulatorAdapter):
         SimulatorAdapter.__init__(self, lhs, rhs)
         self.rng = rng
         self.__last_reactions = last_reactions
-        assert isinstance(self.lhs, ode.ODESimulator)
+        assert isinstance(self.lhs.sim, ode.ODESimulator)
 
     def last_reactions(self):
-        if isinstance(self.rhs, (ode.ODESimulator, gillespie.GillespieSimulator)):
+        if isinstance(self.rhs.sim, (ode.ODESimulator, gillespie.GillespieSimulator)):
             return self.__last_reactions
-        elif isinstance(self.rhs, meso.MesoscopicSimulator):
+        elif isinstance(self.rhs.sim, meso.MesoscopicSimulator):
             def convert(ri):
                 return meso.ReactionInfo(
                     ri.t(), ri.reactants(), ri.products(),
                     self.rng.uniform_int(
-                        0, self.rhs.world().num_subvolumes() - 1))
+                        0, self.rhs.sim.world().num_subvolumes() - 1))
             return [(rr, convert(ri)) for (rr, ri) in self.__last_reactions]
-        elif isinstance(self.rhs, spatiocyte.SpatiocyteSimulator):
+        elif isinstance(self.rhs.sim, spatiocyte.SpatiocyteSimulator):
             def convert(ri):
-                coord = self.rng.uniform_int(0, self.rhs.world().size() - 1)
+                coord = self.rng.uniform_int(0, self.rhs.sim.world().size() - 1)
                 reactants = [(ParticleID(), Voxel(sp, coord, 0, 0))
                              for sp in ri.reactants()]
                 products = [(ParticleID(), Voxel(sp, coord, 0, 0))
                              for sp in ri.products()]
                 return spatiocyte.ReactionInfo(ri.t(), reactants, products)
             return [(rr, convert(ri)) for (rr, ri) in self.__last_reactions]
-        elif isinstance(self.rhs, egfrd.EGFRDSimulator):
+        elif isinstance(self.rhs.sim, egfrd.EGFRDSimulator):
             def convert(ri):
-                lengths = self.lhs.world().edge_lengths()
+                lengths = self.lhs.sim.world().edge_lengths()
                 pos = Real3(self.rng.uniform(0, 1) * lengths[0],
                             self.rng.uniform(0, 1) * lengths[1],
                             self.rng.uniform(0, 1) * lengths[2])
@@ -100,8 +100,8 @@ class ODEEvent(DiscreteTimeEvent):
         return True
 
     def __call__(self, rhs):
-        assert self.sim != rhs
-        return ODESimulatorAdapter(self.sim, rhs, self.__last_reactions)
+        assert self.sim != rhs.sim
+        return ODESimulatorAdapter(self, rhs, self.__last_reactions)
 
     def generate_reactions(self):
         retval = []
@@ -119,51 +119,51 @@ class ODEEvent(DiscreteTimeEvent):
     def updated(self):
         return len(self.__last_reactions) > 0
 
-class GillespieWorldAdapter:
-
-    def __init__(self, lhs, rhs):
-        self.lhs = lhs
-        self.rhs = rhs
-
-    def remove_molecules(self, sp, num, coord=None):
-        self.lhs.remove_molecules(sp, num)
-
-    def remove_voxel(self, voxel):
-        pid, v = voxel
-        self.lhs.remove_molecules(v.species(), 1)
-
-    def __getattr__(self, name):
-        return getattr(self.lhs, name)
+# class GillespieWorldAdapter:
+# 
+#     def __init__(self, lhs, rhs):
+#         self.lhs = lhs
+#         self.rhs = rhs
+# 
+#     def remove_molecules(self, sp, num, coord=None):
+#         self.lhs.remove_molecules(sp, num)
+# 
+#     def remove_voxel(self, voxel):
+#         pid, v = voxel
+#         self.lhs.remove_molecules(v.species(), 1)
+# 
+#     def __getattr__(self, name):
+#         return getattr(self.lhs, name)
 
 class GillespieSimulatorAdapter(SimulatorAdapter):
 
     def __init__(self, lhs, rhs):
         SimulatorAdapter.__init__(self, lhs, rhs)
-        assert isinstance(self.lhs, gillespie.GillespieSimulator)
+        assert isinstance(self.lhs.sim, gillespie.GillespieSimulator)
 
     def last_reactions(self):
-        if isinstance(self.rhs, (ode.ODESimulator, gillespie.GillespieSimulator)):
-            return self.lhs.last_reactions()
-        elif isinstance(self.rhs, meso.MesoscopicSimulator):
+        if isinstance(self.rhs.sim, (ode.ODESimulator, gillespie.GillespieSimulator)):
+            return self.lhs.sim.last_reactions()
+        elif isinstance(self.rhs.sim, meso.MesoscopicSimulator):
             def convert(ri):
                 return meso.ReactionInfo(
                     ri.t(), ri.reactants(), ri.products(),
-                    self.lhs.world().rng().uniform_int(
-                        0, self.rhs.world().num_subvolumes() - 1))
-            return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
-        elif isinstance(self.rhs, spatiocyte.SpatiocyteSimulator):
+                    self.lhs.sim.world().rng().uniform_int(
+                        0, self.rhs.sim.world().num_subvolumes() - 1))
+            return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
+        elif isinstance(self.rhs.sim, spatiocyte.SpatiocyteSimulator):
             def convert(ri):
-                coord = self.lhs.world().rng().uniform_int(0, self.rhs.world().size() - 1)
+                coord = self.lhs.sim.world().rng().uniform_int(0, self.rhs.sim.world().size() - 1)
                 reactants = [(ParticleID(), Voxel(sp, coord, 0, 0))
                              for sp in ri.reactants()]
                 products = [(ParticleID(), Voxel(sp, coord, 0, 0))
                              for sp in ri.products()]
                 return spatiocyte.ReactionInfo(ri.t(), reactants, products)
-            return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
-        elif isinstance(self.rhs, egfrd.EGFRDSimulator):
+            return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
+        elif isinstance(self.rhs.sim, egfrd.EGFRDSimulator):
             def convert(ri):
-                rng = self.lhs.world().rng()
-                lengths = self.lhs.world().edge_lengths()
+                rng = self.lhs.sim.world().rng()
+                lengths = self.lhs.sim.world().edge_lengths()
                 pos = Real3(rng.uniform(0, 1) * lengths[0],
                             rng.uniform(0, 1) * lengths[1],
                             rng.uniform(0, 1) * lengths[2])
@@ -172,7 +172,7 @@ class GillespieSimulatorAdapter(SimulatorAdapter):
                 products = [(ParticleID(), Particle(sp, pos, 0, 0))
                              for sp in ri.products()]
                 return egfrd.ReactionInfo(ri.t(), reactants, products)
-            return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
+            return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
         raise ValueError("Not supported yet.")
 
     # def world(self):
@@ -220,59 +220,59 @@ class GillespieEvent(DiscreteEvent):
         return False
 
     def __call__(self, rhs):
-        assert self.sim != rhs
-        return GillespieSimulatorAdapter(self.sim, rhs)
+        assert self.sim != rhs.sim
+        return GillespieSimulatorAdapter(self, rhs)
 
-class MesoscopicWorldAdapter:
-
-    def __init__(self, lhs, rhs):
-        self.lhs = lhs
-        self.rhs = rhs
-
-    def remove_voxel(self, voxel):
-        pid, v = voxel
-        pos = self.rhs.coordinate2position(v.coordinate())
-        coord = self.lhs.position2coordinate(pos)
-        assert self.lhs.num_molecules(v.species(), coord) > 0
-        self.lhs.remove_molecules(v.species(), 1, coord)
-
-    def __getattr__(self, name):
-        return getattr(self.lhs, name)
+# class MesoscopicWorldAdapter:
+# 
+#     def __init__(self, lhs, rhs):
+#         self.lhs = lhs
+#         self.rhs = rhs
+# 
+#     def remove_voxel(self, voxel):
+#         pid, v = voxel
+#         pos = self.rhs.coordinate2position(v.coordinate())
+#         coord = self.lhs.position2coordinate(pos)
+#         assert self.lhs.num_molecules(v.species(), coord) > 0
+#         self.lhs.remove_molecules(v.species(), 1, coord)
+# 
+#     def __getattr__(self, name):
+#         return getattr(self.lhs, name)
 
 class MesoscopicSimulatorAdapter(SimulatorAdapter):
 
     def __init__(self, lhs, rhs):
         SimulatorAdapter.__init__(self, lhs, rhs)
-        assert isinstance(self.lhs, meso.MesoscopicSimulator)
+        assert isinstance(self.lhs.sim, meso.MesoscopicSimulator)
 
     def last_reactions(self):
-        if isinstance(self.rhs, meso.MesoscopicSimulator):
-            return self.lhs.last_reactions()
-        elif isinstance(self.rhs, (ode.ODESimulator, gillespie.GillespieSimulator)):
+        if isinstance(self.rhs.sim, meso.MesoscopicSimulator):
+            return self.lhs.sim.last_reactions()
+        elif isinstance(self.rhs.sim, (ode.ODESimulator, gillespie.GillespieSimulator)):
             return [(rr, gillespie.ReactionInfo(ri.t(), ri.reactants(), ri.products()))
-                    for (rr, ri) in self.lhs.last_reactions()]
-        elif isinstance(self.rhs, spatiocyte.SpatiocyteSimulator):
+                    for (rr, ri) in self.lhs.sim.last_reactions()]
+        elif isinstance(self.rhs.sim, spatiocyte.SpatiocyteSimulator):
             def convert(ri):
-                g = self.lhs.world().coord2global(ri.coordinate())
-                rng = self.lhs.world().rng()
-                lengths = self.lhs.world().subvolume_edge_lengths()
+                g = self.lhs.sim.world().coord2global(ri.coordinate())
+                rng = self.lhs.sim.world().rng()
+                lengths = self.lhs.sim.world().subvolume_edge_lengths()
                 pos = Real3((g[0] + rng.uniform(0, 1)) * lengths[0],
                             (g[1] + rng.uniform(0, 1)) * lengths[1],
                             (g[2] + rng.uniform(0, 1)) * lengths[2])
-                assert ri.coordinate() == self.lhs.world().position2coordinate(pos)
-                coord = self.rhs.world().position2coordinate(pos)  #XXX: This may cause an overlap
-                # assert ri.coordinate() == self.lhs.world().position2coordinate(self.rhs.world().coordinate2position(coord))  #XXX: This is not always True.
+                assert ri.coordinate() == self.lhs.sim.world().position2coordinate(pos)
+                coord = self.rhs.sim.world().position2coordinate(pos)  #XXX: This may cause an overlap
+                # assert ri.coordinate() == self.lhs.sim.world().position2coordinate(self.rhs.sim.world().coordinate2position(coord))  #XXX: This is not always True.
                 reactants = [(ParticleID(), Voxel(sp, coord, 0, 0))
                              for sp in ri.reactants()]
                 products = [(ParticleID(), Voxel(sp, coord, 0, 0))
                              for sp in ri.products()]
                 return spatiocyte.ReactionInfo(ri.t(), reactants, products)
-            return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
-        elif isinstance(self.rhs, egfrd.EGFRDSimulator):
+            return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
+        elif isinstance(self.rhs.sim, egfrd.EGFRDSimulator):
             def convert(ri):
-                g = self.lhs.world().coord2global(ri.coordinate())
-                rng = self.lhs.world().rng()
-                lengths = self.lhs.world().subvolume_edge_lengths()
+                g = self.lhs.sim.world().coord2global(ri.coordinate())
+                rng = self.lhs.sim.world().rng()
+                lengths = self.lhs.sim.world().subvolume_edge_lengths()
                 pos = Real3((g[0] + rng.uniform(0, 1)) * lengths[0],
                             (g[1] + rng.uniform(0, 1)) * lengths[1],
                             (g[2] + rng.uniform(0, 1)) * lengths[2])
@@ -281,8 +281,8 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
                 products = [(ParticleID(), Particle(sp, pos, 0, 0))
                              for sp in ri.products()]
                 return egfrd.ReactionInfo(ri.t(), reactants, products)
-            return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
-        raise ValueError("Not supported yet [{}].".format(repr(self.rhs)))
+            return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
+        raise ValueError("Not supported yet [{}].".format(repr(self.rhs.sim)))
 
     # def world(self):
     #     return MesoscopicWorldAdapter(self.lhs.world(), self.rhs.world())
@@ -322,68 +322,68 @@ class MesoscopicEvent(DiscreteEvent):
         return True
 
     def __call__(self, rhs):
-        assert self.sim != rhs
-        return MesoscopicSimulatorAdapter(self.sim, rhs)
+        assert self.sim != rhs.sim
+        return MesoscopicSimulatorAdapter(self, rhs)
 
-class SpatiocyteWorldAdapter:
-
-    def __init__(self, lhs, rhs):
-        self.lhs = lhs
-        self.rhs = rhs
-
-    #def remove_molecules(self, sp, num, coord=None):
-    #    if coord is None:
-    #        self.lhs.remove_molecules(sp, num)
-    #        return
-    #    pids = [pid for pid, v in self.lhs.list_voxels_exact(sp)
-    #            if self.rhs.position2coordinate(
-    #                self.lhs.coordinate2position(v.coordinate())) == coord]
-    #    assert len(pids) >= num
-    #    for i in range(num):
-    #        pid = pids.pop(self.lhs.rng().uniform_int(0, len(pids) - 1))
-    #        self.lhs.remove_voxel(pid)
-
-    def list_coordinates_exact(self, sp):
-        return [self.rhs.position2coordinate(
-                    self.lhs.coordinate2position(v.coordinate()))
-                for pid, v in self.lhs.list_voxels_exact(sp)]
-
-    def __getattr__(self, name):
-        return getattr(self.lhs, name)
+# class SpatiocyteWorldAdapter:
+# 
+#     def __init__(self, lhs, rhs):
+#         self.lhs = lhs
+#         self.rhs = rhs
+# 
+#     #def remove_molecules(self, sp, num, coord=None):
+#     #    if coord is None:
+#     #        self.lhs.remove_molecules(sp, num)
+#     #        return
+#     #    pids = [pid for pid, v in self.lhs.list_voxels_exact(sp)
+#     #            if self.rhs.position2coordinate(
+#     #                self.lhs.coordinate2position(v.coordinate())) == coord]
+#     #    assert len(pids) >= num
+#     #    for i in range(num):
+#     #        pid = pids.pop(self.lhs.rng().uniform_int(0, len(pids) - 1))
+#     #        self.lhs.remove_voxel(pid)
+# 
+#     def list_coordinates_exact(self, sp):
+#         return [self.rhs.position2coordinate(
+#                     self.lhs.coordinate2position(v.coordinate()))
+#                 for pid, v in self.lhs.list_voxels_exact(sp)]
+# 
+#     def __getattr__(self, name):
+#         return getattr(self.lhs, name)
 
 class SpatiocyteSimulatorAdapter(SimulatorAdapter):
 
     def __init__(self, lhs, rhs):
         SimulatorAdapter.__init__(self, lhs, rhs)
-        assert isinstance(self.lhs, spatiocyte.SpatiocyteSimulator)
+        assert isinstance(self.lhs.sim, spatiocyte.SpatiocyteSimulator)
 
     def last_reactions(self):
-        if isinstance(self.rhs, spatiocyte.SpatiocyteSimulator):
-            return self.lhs.last_reactions()
-        elif isinstance(self.rhs, (ode.ODESimulator, gillespie.GillespieSimulator)):
+        if isinstance(self.rhs.sim, spatiocyte.SpatiocyteSimulator):
+            return self.lhs.sim.last_reactions()
+        elif isinstance(self.rhs.sim, (ode.ODESimulator, gillespie.GillespieSimulator)):
             def convert(ri):
                 reactants = [v.species() for pid, v in ri.reactants()]
                 products = [v.species() for pid, v in ri.products()]
                 return gillespie.ReactionInfo(ri.t(), reactants, products)
-            return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
-        elif isinstance(self.rhs, meso.MesoscopicSimulator):
+            return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
+        elif isinstance(self.rhs.sim, meso.MesoscopicSimulator):
             def convert(ri):
                 reactants = [v.species() for pid, v in ri.reactants()]
                 products = [v.species() for pid, v in ri.products()]
                 assert len(products) > 0
-                pos = self.lhs.world().coordinate2position(ri.products()[0][1].coordinate())
-                coord = self.rhs.world().position2coordinate(pos)
+                pos = self.lhs.sim.world().coordinate2position(ri.products()[0][1].coordinate())
+                coord = self.rhs.sim.world().position2coordinate(pos)
                 return meso.ReactionInfo(ri.t(), reactants, products, coord)
-            return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
-        elif isinstance(self.rhs, egfrd.EGFRDSimulator):
+            return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
+        elif isinstance(self.rhs.sim, egfrd.EGFRDSimulator):
             def convert(ri):
-                reactants = [(pid, Particle(v.species(), self.lhs.world().coordinate2position(v.coordinate()), v.radius(), v.D()))
+                reactants = [(pid, Particle(v.species(), self.lhs.sim.world().coordinate2position(v.coordinate()), v.radius(), v.D()))
                               for pid, v in ri.reactants()]
-                products = [(pid, Particle(v.species(), self.lhs.world().coordinate2position(v.coordinate()), v.radius(), v.D()))
+                products = [(pid, Particle(v.species(), self.lhs.sim.world().coordinate2position(v.coordinate()), v.radius(), v.D()))
                              for pid, v in ri.products()]
                 return egfrd.ReactionInfo(ri.t(), reactants, products)
-            return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
-        raise ValueError("Not supported yet [{}].".format(repr(self.rhs)))
+            return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
+        raise ValueError("Not supported yet [{}].".format(repr(self.rhs.sim)))
 
     # def world(self):
     #     return SpatiocyteWorldAdapter(self.lhs.world(), self.rhs.world())
@@ -421,41 +421,41 @@ class SpatiocyteEvent(DiscreteEvent):
         return True
 
     def __call__(self, rhs):
-        assert self.sim != rhs
-        return SpatiocyteSimulatorAdapter(self.sim, rhs)
+        assert self.sim != rhs.sim
+        return SpatiocyteSimulatorAdapter(self, rhs)
 
 class EGFRDSimulatorAdapter(SimulatorAdapter):
 
     def __init__(self, lhs, rhs):
         SimulatorAdapter.__init__(self, lhs, rhs)
-        assert isinstance(self.lhs, egfrd.EGFRDSimulator)
+        assert isinstance(self.lhs.sim, egfrd.EGFRDSimulator)
 
     def last_reactions(self):
-        if isinstance(self.rhs, spatiocyte.SpatiocyteSimulator):
+        if isinstance(self.rhs.sim, spatiocyte.SpatiocyteSimulator):
             def convert(ri):
-                reactants = [(pid, Voxel(v.species(), self.rhs.world().position2coordinate(v.position()), v.radius(), v.D()))
+                reactants = [(pid, Voxel(v.species(), self.rhs.sim.world().position2coordinate(v.position()), v.radius(), v.D()))
                               for pid, v in ri.reactants()]
-                products = [(pid, Voxel(v.species(), self.rhs.world().position2coordinate(v.position()), v.radius(), v.D()))
+                products = [(pid, Voxel(v.species(), self.rhs.sim.world().position2coordinate(v.position()), v.radius(), v.D()))
                              for pid, v in ri.products()]
                 return spatiocyte.ReactionInfo(ri.t(), reactants, products)
-            return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
-        elif isinstance(self.rhs, (ode.ODESimulator, gillespie.GillespieSimulator)):
+            return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
+        elif isinstance(self.rhs.sim, (ode.ODESimulator, gillespie.GillespieSimulator)):
             def convert(ri):
                 reactants = [p.species() for pid, p in ri.reactants()]
                 products = [p.species() for pid, p in ri.products()]
                 return gillespie.ReactionInfo(ri.t(), reactants, products)
-            return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
-        elif isinstance(self.rhs, meso.MesoscopicSimulator):
+            return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
+        elif isinstance(self.rhs.sim, meso.MesoscopicSimulator):
             def convert(ri):
                 reactants = [p.species() for pid, p in ri.reactants()]
                 products = [p.species() for pid, p in ri.products()]
                 assert len(products) > 0
-                coord = self.rhs.world().position2coordinate(ri.products()[0][1].position())
+                coord = self.rhs.sim.world().position2coordinate(ri.products()[0][1].position())
                 return meso.ReactionInfo(ri.t(), reactants, products, coord)
-            return [(rr, convert(ri)) for (rr, ri) in self.lhs.last_reactions()]
-        elif isinstance(self.rhs, egfrd.EGFRDSimulator):
-            return self.lhs.last_reactions()
-        raise ValueError("Not supported yet [{}].".format(repr(self.rhs)))
+            return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
+        elif isinstance(self.rhs.sim, egfrd.EGFRDSimulator):
+            return self.lhs.sim.last_reactions()
+        raise ValueError("Not supported yet [{}].".format(repr(self.rhs.sim)))
 
 class EGFRDEvent(DiscreteEvent):
 
@@ -490,5 +490,5 @@ class EGFRDEvent(DiscreteEvent):
         return True
 
     def __call__(self, rhs):
-        assert self.sim != rhs
-        return EGFRDSimulatorAdapter(self.sim, rhs)
+        assert self.sim != rhs.sim
+        return EGFRDSimulatorAdapter(self, rhs)
