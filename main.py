@@ -26,14 +26,13 @@ def test1():
         E1 == E2 | (1.0, 1.0)
 
         A1 == B1 | (1.0, 1.0)
-        B1 == C1 | (1.0, 1.0)
-        C1 == A1 | (1.0, 1.0)
+        A1 == C1 | (1.0, 1.0)
         A1 == D1 | (1.0, 1.0)
-        B1 == D1 | (1.0, 1.0)
-        C1 == D1 | (1.0, 1.0)
-
         A1 == E1 | (1.0, 1.0)
+        B1 == C1 | (1.0, 1.0)
+        B1 == D1 | (1.0, 1.0)
         B1 == E1 | (1.0, 1.0)
+        C1 == D1 | (1.0, 1.0)
         C1 == E1 | (1.0, 1.0)
         D1 == E1 | (1.0, 1.0)
 
@@ -118,8 +117,7 @@ def test2():
     with reaction_rules():
         A1 == A2 | (1.0, 1.0)
         E1 == E2 | (1.0, 1.0)
-        A1 > E1 | 1.0
-        E1 > A1 | 1.0
+        A1 == E1 | (1.0, 1.0)
 
     m = get_model()
 
@@ -167,7 +165,62 @@ def test2():
     plt.savefig('result.eps')
     numpy.savetxt("result.txt", data)
 
+def test3():
+    edge_lengths = Real3(1, 1, 1)
+
+    with reaction_rules():
+        A1 == A2 | (1.0, 1.0)
+        B1 == B2 | (1.0, 1.0)
+
+    m = get_model()
+
+    w1 = gillespie.GillespieWorld(edge_lengths)
+    w1.bind_to(m)
+    sim1 = gillespie.GillespieSimulator(w1)
+
+    w2 = meso.MesoscopicWorld(edge_lengths, Integer3(9, 9, 9))
+    w2.bind_to(m)
+    sim2 = meso.MesoscopicSimulator(w2)
+
+    w1.add_molecules(Species("A1"), 60)
+    w2.add_molecules(Species("B1"), 60)
+
+    owner = coordinator.Coordinator()
+    ev1 = simulator_event(sim1)
+    ev1.register_species(('A1', 'A2'))
+    # ev1.borrow_species('B1', 'B1_')
+    owner.add_event(ev1)
+    owner.add_event(simulator_event(sim2)).register_species(('B1', 'B2'))
+    owner.initialize()
+
+    data = []
+    def log(owner):
+        data.append((
+            owner.t(),
+            owner.get_value(Species("A1")),
+            owner.get_value(Species("A2")),
+            owner.get_value(Species("B1")),
+            owner.get_value(Species("B2")),
+            ))
+
+    log(owner)
+    while owner.step(50):
+        if owner.last_event.updated():
+            log(owner)
+
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pylab as plt
+
+    data = numpy.asarray(data)
+    for i in range(1, 5):
+        plt.plot(data.T[0], data.T[i], '-')
+    # plt.show()
+    plt.savefig('result.eps')
+    numpy.savetxt("result.txt", data)
+
 
 if __name__ == "__main__":
     # test1()
-    test2()
+    # test2()
+    test3()
