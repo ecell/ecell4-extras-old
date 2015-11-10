@@ -210,6 +210,15 @@ class GillespieEvent(DiscreteEvent):
             self.sim.world().add_molecules(sp, 1)
         return True
 
+    def _mirror(self, interrupter, src, dst):
+        w = interrupter.sim.world()
+        value1 = w.get_value_exact(src)
+        value2 = self.sim.world().get_value_exact(dst)
+        if value1 != value2:
+            self.sim.world().set_value(dst, value1)
+            return True
+        return False
+
     def __call__(self, rhs):
         assert self.sim != rhs
         return GillespieSimulatorAdapter(self.sim, rhs)

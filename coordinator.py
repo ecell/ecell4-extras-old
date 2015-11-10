@@ -18,22 +18,36 @@ class SimulatorEvent:
 
     def __init__(self, sim):
         self.sim = sim
-        self.__species = set()
+        self.__belongings = set()
+        self.__borrowings = dict()
 
-    def register_species(self, value):
+    def add(self, value):
         if isinstance(value, Species):
-            self.__species.add(value)
+            self.__belongings.add(value)
         elif isinstance(value, str):
-            self.__species.add(Species(value))
+            self.__belongings.add(Species(value))
         elif isinstance(value, collections.Iterable):
             for sp in value:
-                self.register_species(sp)
+                self.add(sp)
         else:
             raise ValueError(
                 'an invalid argument [{}] was given.'.format(repr(value)))
 
+    def borrow(self, src, dst):
+        if isinstance(src, Species) and isinstance(dst, Species):
+            self.__borrowings[dst] = src
+        elif isinstance(src, str) and isinstance(dst, str):
+            self.__borrowings[Species(dst)] = Species(src)
+        else:
+            raise ValueError(
+                'an invalid argument [{} and {}] was given.'.format(
+                    repr(src), repr(dst)))
+
     def own(self, sp):
-        return (sp in self.__species)
+        return (sp in self.__belongings)
+
+    def owe(self, sp):
+        return self.__borrowings.get(sp, None)
 
     def initialize(self):
         self.sim.initialize()
@@ -50,19 +64,29 @@ class SimulatorEvent:
             assert self.sim.t() == t
             return True
 
+        dirty = False
+
+        for dst, src in self.__borrowings.items():
+            if not interrupter.own(src):
+                continue
+            if self._mirror(interrupter, src, dst):
+                dirty = True
+
         if interrupter.updated():
             last_reactions = interrupter(self.sim).last_reactions()
-            dirty = False
             for rr in last_reactions:
                 if self._interrupt(t, rr[1]):
                     dirty = True
-            if dirty:
-                self.sim.initialize()
-                return True
-        return False
+
+        if dirty:
+            self.sim.initialize()
+        return dirty
 
     def updated(self):
         return True
+
+    def _mirror(self, interrupter, src, dst):
+        raise RuntimeError('Not implemented yet [{}].'.format(repr(self)))
 
 class DiscreteEvent(SimulatorEvent):
 

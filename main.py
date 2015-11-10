@@ -67,11 +67,11 @@ def test1():
     # w5.add_molecules(Species("E1"), 60)
 
     owner = coordinator.Coordinator()
-    owner.add_event(simulator_event(sim1)).register_species(('A1', 'A2'))
-    owner.add_event(simulator_event(sim2)).register_species(('B1', 'B2'))
-    owner.add_event(simulator_event(sim3)).register_species(('C1', 'C2'))
-    owner.add_event(simulator_event(sim4)).register_species(('D1', 'D2'))
-    owner.add_event(ODEEvent(sim5, 0.01)).register_species(('E1', 'E2'))
+    owner.add_event(simulator_event(sim1)).add(('A1', 'A2'))
+    owner.add_event(simulator_event(sim2)).add(('B1', 'B2'))
+    owner.add_event(simulator_event(sim3)).add(('C1', 'C2'))
+    owner.add_event(simulator_event(sim4)).add(('D1', 'D2'))
+    owner.add_event(ODEEvent(sim5, 0.01)).add(('E1', 'E2'))
     owner.initialize()
 
     data = []
@@ -134,8 +134,8 @@ def test2():
     # w2.add_molecules(Species("E1"), 60)
 
     owner = coordinator.Coordinator()
-    owner.add_event(simulator_event(sim1)).register_species(('A1', 'A2'))
-    owner.add_event(ODEEvent(sim2, 0.01)).register_species(('E1', 'E2'))
+    owner.add_event(simulator_event(sim1)).add(('A1', 'A2'))
+    owner.add_event(ODEEvent(sim2, 0.01)).add(('E1', 'E2'))
     owner.initialize()
 
     data = []
@@ -172,6 +172,8 @@ def test3():
         A1 == A2 | (1.0, 1.0)
         B1 == B2 | (1.0, 1.0)
 
+        # A2 + B2_ > B3 | 1.0 / 30.0
+
     m = get_model()
 
     w1 = gillespie.GillespieWorld(edge_lengths)
@@ -187,10 +189,10 @@ def test3():
 
     owner = coordinator.Coordinator()
     ev1 = simulator_event(sim1)
-    ev1.register_species(('A1', 'A2'))
-    # ev1.borrow_species('B1', 'B1_')
+    ev1.add(('A1', 'A2'))
+    ev1.borrow('B2', 'B2_')
     owner.add_event(ev1)
-    owner.add_event(simulator_event(sim2)).register_species(('B1', 'B2'))
+    owner.add_event(simulator_event(sim2)).add(('B1', 'B2', 'B3'))
     owner.initialize()
 
     data = []
@@ -201,6 +203,8 @@ def test3():
             owner.get_value(Species("A2")),
             owner.get_value(Species("B1")),
             owner.get_value(Species("B2")),
+            # owner.get_value(Species("B3")),
+            w1.get_value(Species("B2_")),
             ))
 
     log(owner)
