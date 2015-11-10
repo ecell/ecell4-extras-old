@@ -166,13 +166,19 @@ def test2():
     numpy.savetxt("result.txt", data)
 
 def test3():
+    D, radius = 1, 0.005
     edge_lengths = Real3(1, 1, 1)
+
+    with species_attributes():
+        A1 | A2 | B1 | B2 | B3 | {
+            "D": str(D), "radius": str(radius)}
 
     with reaction_rules():
         A1 == A2 | (1.0, 1.0)
         B1 == B2 | (1.0, 1.0)
 
-        # A2 + B2_ > B3 | 1.0 / 30.0
+        A2 + B2_ > B3 | 1.0 / 30.0
+        B3 > A2 + B2 | 1.0
 
     m = get_model()
 
@@ -180,9 +186,15 @@ def test3():
     w1.bind_to(m)
     sim1 = gillespie.GillespieSimulator(w1)
 
-    w2 = meso.MesoscopicWorld(edge_lengths, Integer3(9, 9, 9))
+    # w2 = meso.MesoscopicWorld(edge_lengths, Integer3(9, 9, 9))
+    # w2.bind_to(m)
+    # sim2 = meso.MesoscopicSimulator(w2)
+    # w2 = spatiocyte.SpatiocyteWorld(edge_lengths, radius)
+    # w2.bind_to(m)
+    # sim2 = spatiocyte.SpatiocyteSimulator(w2)
+    w2 = egfrd.EGFRDWorld(edge_lengths, Integer3(4, 4, 4))
     w2.bind_to(m)
-    sim2 = meso.MesoscopicSimulator(w2)
+    sim2 = egfrd.EGFRDSimulator(w2)
 
     w1.add_molecules(Species("A1"), 60)
     w2.add_molecules(Species("B1"), 60)
@@ -203,12 +215,12 @@ def test3():
             owner.get_value(Species("A2")),
             owner.get_value(Species("B1")),
             owner.get_value(Species("B2")),
-            # owner.get_value(Species("B3")),
-            w1.get_value(Species("B2_")),
+            owner.get_value(Species("B3")),
             ))
 
     log(owner)
-    while owner.step(50):
+    while owner.step(10):
+    # while owner.step(50):
         if owner.last_event.updated():
             log(owner)
 
@@ -217,7 +229,7 @@ def test3():
     import matplotlib.pylab as plt
 
     data = numpy.asarray(data)
-    for i in range(1, 5):
+    for i in range(1, 6):
         plt.plot(data.T[0], data.T[i], '-')
     # plt.show()
     plt.savefig('result.eps')
@@ -225,6 +237,6 @@ def test3():
 
 
 if __name__ == "__main__":
-    test1()
+    # test1()
     # test2()
-    # test3()
+    test3()

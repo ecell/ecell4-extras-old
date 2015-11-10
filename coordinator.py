@@ -12,7 +12,7 @@ class SimulatorAdapter:
         self.rhs = rhs
 
     # def __getattr__(self, name):
-    #     return getattr(self.lhs, name)
+    #     return getattr(self.lhs.sim, name)
 
 class SimulatorEvent:
 
@@ -69,14 +69,25 @@ class SimulatorEvent:
         for dst, src in self.__borrowings.items():
             if not interrupter.own(src):
                 continue
-            if self._mirror(interrupter, src, dst):
+            if self._mirror(t, interrupter, src, dst):
                 dirty = True
 
-        if interrupter.updated():
-            last_reactions = interrupter(self).last_reactions()
-            for rr in last_reactions:
-                if self._interrupt(t, rr[1]):
-                    dirty = True
+        last_reactions = interrupter(self).last_reactions()
+        for rr in last_reactions:
+            if self._interrupt(t, rr[1]):
+                dirty = True
+
+        # for dst, src in self.__borrowings.items():
+        #     if not interrupter.own(src):
+        #         continue
+        #     if self._mirror(t, interrupter, src, dst):
+        #         dirty = True
+
+        # if interrupter.updated():
+        #     last_reactions = interrupter(self).last_reactions()
+        #     for rr in last_reactions:
+        #         if self._interrupt(t, rr[1]):
+        #             dirty = True
 
         if dirty:
             self.sim.initialize()
@@ -85,7 +96,7 @@ class SimulatorEvent:
     def updated(self):
         return True
 
-    def _mirror(self, interrupter, src, dst):
+    def _mirror(self, t, interrupter, src, dst):
         raise RuntimeError('Not implemented yet [{}].'.format(repr(self)))
 
     def _interrupt(self, t, ri):
@@ -193,6 +204,7 @@ class Coordinator:
         assert self.last_event.t() == ntime
         self.__t = ntime
 
-        self.interrupt_all(ntime, self.last_event, (idx, ))
+        if self.last_event.updated():
+            self.interrupt_all(ntime, self.last_event, (idx, ))
 
         self.last_event.sync()  #XXX: under development

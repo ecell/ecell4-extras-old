@@ -146,31 +146,76 @@ class GillespieSimulatorAdapter(SimulatorAdapter):
             return self.lhs.sim.last_reactions()
         elif isinstance(self.rhs.sim, meso.MesoscopicSimulator):
             def convert(ri):
-                return meso.ReactionInfo(
-                    ri.t(), ri.reactants(), ri.products(),
-                    self.lhs.sim.world().rng().uniform_int(
-                        0, self.rhs.sim.world().num_subvolumes() - 1))
+                reactants = ri.reactants()
+                if len(reactants) < 2:
+                    coord = self.lhs.sim.world().rng().uniform_int(
+                        0, self.rhs.sim.world().num_subvolumes() - 1)
+                else:
+                    assert len(reactants) == 2
+                    sp = self.lhs.owe(reactants[1])
+                    if sp is None or not self.rhs.own(sp):
+                        coord = self.lhs.sim.world().rng().uniform_int(
+                            0, self.rhs.sim.world().num_subvolumes() - 1)
+                    else:
+                        reactants[1] = sp
+                        coords = self.rhs.sim.world().list_coordinates_exact(sp)
+                        coord = coords[self.lhs.sim.world().rng().uniform_int(0, len(coords) - 1)]
+                return meso.ReactionInfo(ri.t(), reactants, ri.products(), coord)
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
         elif isinstance(self.rhs.sim, spatiocyte.SpatiocyteSimulator):
             def convert(ri):
-                coord = self.lhs.sim.world().rng().uniform_int(0, self.rhs.sim.world().size() - 1)
-                reactants = [(ParticleID(), Voxel(sp, coord, 0, 0))
-                             for sp in ri.reactants()]
-                products = [(ParticleID(), Voxel(sp, coord, 0, 0))
-                             for sp in ri.products()]
+                if len(ri.reactants()) < 2:
+                    coord = self.lhs.sim.world().rng().uniform_int(0, self.rhs.sim.world().size() - 1)
+                    reactants = [(ParticleID(), Voxel(sp, coord, 0, 0))
+                                 for sp in ri.reactants()]
+                    products = [(ParticleID(), Voxel(sp, coord, 0, 0))
+                                 for sp in ri.products()]
+                else:
+                    assert len(ri.reactants()) == 2
+                    sp = self.lhs.owe(ri.reactants()[1])
+                    if sp is None or not self.rhs.own(sp):
+                        coord = self.lhs.sim.world().rng().uniform_int(0, self.rhs.sim.world().size() - 1)
+                        reactants = [(ParticleID(), Voxel(sp, coord, 0, 0))
+                                     for sp in ri.reactants()]
+                        products = [(ParticleID(), Voxel(sp, coord, 0, 0))
+                                     for sp in ri.products()]
+                    else:
+                        voxels = self.rhs.sim.world().list_voxels_exact(sp)
+                        v = voxels[self.lhs.sim.world().rng().uniform_int(0, len(voxels) - 1)]
+                        reactants = [(ParticleID(), Voxel(ri.reactants()[0], v[1].coordinate(), 0, 0)), v]
+                        products = [(ParticleID(), Voxel(sp, v[1].coordinate(), 0, 0))
+                                     for sp in ri.products()]
                 return spatiocyte.ReactionInfo(ri.t(), reactants, products)
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
         elif isinstance(self.rhs.sim, egfrd.EGFRDSimulator):
             def convert(ri):
                 rng = self.lhs.sim.world().rng()
                 lengths = self.lhs.sim.world().edge_lengths()
-                pos = Real3(rng.uniform(0, 1) * lengths[0],
-                            rng.uniform(0, 1) * lengths[1],
-                            rng.uniform(0, 1) * lengths[2])
-                reactants = [(ParticleID(), Particle(sp, pos, 0, 0))
-                             for sp in ri.reactants()]
-                products = [(ParticleID(), Particle(sp, pos, 0, 0))
-                             for sp in ri.products()]
+                if len(ri.reactants()) < 2:
+                    pos = Real3(rng.uniform(0, 1) * lengths[0],
+                                rng.uniform(0, 1) * lengths[1],
+                                rng.uniform(0, 1) * lengths[2])
+                    reactants = [(ParticleID(), Particle(sp, pos, 0, 0))
+                                 for sp in ri.reactants()]
+                    products = [(ParticleID(), Particle(sp, pos, 0, 0))
+                                 for sp in ri.products()]
+                else:
+                    assert len(ri.reactants()) == 2
+                    sp = self.lhs.owe(ri.reactants()[1])
+                    if sp is None or not self.rhs.own(sp):
+                        pos = Real3(rng.uniform(0, 1) * lengths[0],
+                                    rng.uniform(0, 1) * lengths[1],
+                                    rng.uniform(0, 1) * lengths[2])
+                        reactants = [(ParticleID(), Particle(sp, pos, 0, 0))
+                                     for sp in ri.reactants()]
+                        products = [(ParticleID(), Particle(sp, pos, 0, 0))
+                                     for sp in ri.products()]
+                    else:
+                        particles = self.rhs.sim.world().list_particles_exact(sp)
+                        p = particles[rng.uniform_int(0, len(particles) - 1)]
+                        reactants = [(ParticleID(), Particle(sp, p[1].position(), 0, 0)), p]
+                        products = [(ParticleID(), Particle(sp, p[1].position(), 0, 0))
+                                     for sp in ri.products()]
                 return egfrd.ReactionInfo(ri.t(), reactants, products)
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
         raise ValueError("Not supported yet.")
@@ -210,11 +255,12 @@ class GillespieEvent(DiscreteEvent):
             self.sim.world().add_molecules(sp, 1)
         return True
 
-    def _mirror(self, interrupter, src, dst):
+    def _mirror(self, t, interrupter, src, dst):
         w = interrupter.sim.world()
         value1 = w.get_value_exact(src)
         value2 = self.sim.world().get_value_exact(dst)
         if value1 != value2:
+            self.sim.step(t)
             self.sim.world().set_value(dst, value1)
             return True
         return False
@@ -311,12 +357,15 @@ class MesoscopicEvent(DiscreteEvent):
             self.sim.initialize()
 
     def _interrupt(self, t, ri):
+        reactants = [sp for sp in ri.reactants() if self.own(sp)]
         products = [sp for sp in ri.products() if self.own(sp)]
-        if len(products) == 0:
+        if len(reactants) == 0 and len(products) == 0:
             return False
         coord = ri.coordinate()
         self.sim.step(t)
         assert self.sim.t() == t
+        for sp in reactants:
+            self.sim.world().remove_molecules(sp, 1, coord)
         for sp in products:
             self.sim.world().add_molecules(sp, 1, coord)
         return True
@@ -411,11 +460,14 @@ class SpatiocyteEvent(DiscreteEvent):
             self.sim.initialize()
 
     def _interrupt(self, t, ri):
+        reactants = [(pid, v) for pid, v in ri.reactants() if self.own(v.species())]
         products = [(pid, v) for pid, v in ri.products() if self.own(v.species())]
-        if len(products) == 0:
+        if len(reactants) == 0 and len(products) == 0:
             return False
         self.sim.step(t)
         assert self.sim.t() == t
+        for pid, v in reactants:
+            self.sim.world().remove_voxel(pid)
         for pid, v in products:
             self.sim.world().new_voxel(v.species(), v.coordinate())
         return True
@@ -480,11 +532,14 @@ class EGFRDEvent(DiscreteEvent):
             self.sim.initialize()
 
     def _interrupt(self, t, ri):
+        reactants = [(pid, p) for pid, p in ri.reactants() if self.own(p.species())]
         products = [(pid, p) for pid, p in ri.products() if self.own(p.species())]
-        if len(products) == 0:
+        if len(reactants) == 0 and len(products) == 0:
             return False
         self.sim.step(t)
         assert self.sim.t() == t
+        for pid, p in reactants:
+            self.sim.world().remove_particle(pid)
         for pid, p in products:
             self.sim.world().new_particle(p.species(), p.position())
         return True
