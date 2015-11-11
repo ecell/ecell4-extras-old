@@ -14,10 +14,15 @@ class SimulatorAdapter:
     # def __getattr__(self, name):
     #     return getattr(self.lhs.sim, name)
 
+class EventKind:
+
+    (NO_EVENT, REACTION_EVENT, STEP_EVENT, STOP_EVENT, UPDATE_EVENT) = range(5)  #XXX: better to use enum
+
 class SimulatorEvent:
 
     def __init__(self, sim):
         self.sim = sim
+        self.event_kind = EventKind.NO_EVENT
         self.__belongings = set()
         self.__borrowings = dict()
 
@@ -58,43 +63,31 @@ class SimulatorEvent:
     def num_steps(self):
         return self.sim.num_steps()
 
-    def interrupt(self, t, interrupter):
-        if interrupter is None:
+    def interrupt(self, t, interrupter, event_kind=EventKind.NO_EVENT):
+        if event_kind == EventKind.NO_EVENT:
+            assert interrupter is None
             self.sim.step(t)
             assert self.sim.t() == t
             return True
 
         dirty = False
 
-        for dst, src in self.__borrowings.items():
-            if not interrupter.own(src):
-                continue
-            if self._mirror(t, interrupter, src, dst):
-                dirty = True
+        if event_kind in (EventKind.REACTION_EVENT, EventKind.UPDATE_EVENT):
+            for dst, src in self.__borrowings.items():
+                if not interrupter.own(src):
+                    continue
+                if self._mirror(t, interrupter, src, dst):
+                    dirty = True
 
-        last_reactions = interrupter(self).last_reactions()
-        for rr in last_reactions:
-            if self._interrupt(t, rr[1]):
-                dirty = True
-
-        # for dst, src in self.__borrowings.items():
-        #     if not interrupter.own(src):
-        #         continue
-        #     if self._mirror(t, interrupter, src, dst):
-        #         dirty = True
-
-        # if interrupter.updated():
-        #     last_reactions = interrupter(self).last_reactions()
-        #     for rr in last_reactions:
-        #         if self._interrupt(t, rr[1]):
-        #             dirty = True
+        if event_kind == EventKind.REACTION_EVENT:
+            last_reactions = interrupter(self).last_reactions()
+            for rr in last_reactions:
+                if self._interrupt(t, rr[1]):
+                    dirty = True
 
         if dirty:
             self.sim.initialize()
         return dirty
-
-    def updated(self):
-        return True
 
     def _mirror(self, t, interrupter, src, dst):
         raise RuntimeError('Not implemented yet [{}].'.format(repr(self)))
@@ -115,9 +108,10 @@ class DiscreteEvent(SimulatorEvent):
 
     def step(self):
         self.sim.step()
-
-    def updated(self):
-        return len(self.sim.last_reactions()) > 0
+        if len(self.sim.last_reactions()) > 0:
+            self.event_kind = EventKind.REACTION_EVENT
+        else:
+            self.event_kind = EventKind.STEP_EVENT
 
 class DiscreteTimeEvent(SimulatorEvent):
 
@@ -170,12 +164,12 @@ class Coordinator:
                 (idx, ntime) = (i + 1, ev.next_time())
         return (idx, ntime)
 
-    def interrupt_all(self, t, interrupter=None, ignore=()):
+    def interrupt_all(self, t, interrupter, event_kind, ignore=()):
         for i, ev in enumerate(self.events):
             if i in ignore:
                 continue
-            if ev.interrupt(t, interrupter):
-                self.interrupt_all(t, ev, (i, ))
+            if ev.interrupt(t, interrupter, event_kind):
+                self.interrupt_all(t, ev, EventKind.UPDATE_EVENT, (i, ))
 
     def step(self, upto=None):
         self.num_steps += 1
@@ -188,7 +182,7 @@ class Coordinator:
         idx, ntime = self.get_next_event()
         if ntime > upto:
             self.__t = upto
-            self.interrupt_all(upto, None)
+            self.interrupt_all(upto, None, EventKind.STOP_EVENT)
             return False
 
         self._step()
@@ -200,11 +194,11 @@ class Coordinator:
 
         idx, ntime = self.get_next_event()
         self.last_event = self.events[idx]
+        # print("{} => {}".format(ntime, repr(self.last_event)))
         self.last_event.step()
         assert self.last_event.t() == ntime
         self.__t = ntime
 
-        if self.last_event.updated():
-            self.interrupt_all(ntime, self.last_event, (idx, ))
+        self.interrupt_all(ntime, self.last_event, self.last_event.event_kind, (idx, ))
 
         self.last_event.sync()  #XXX: under development

@@ -2,7 +2,7 @@
 
 import math
 import collections
-from coordinator import SimulatorAdapter, DiscreteEvent, DiscreteTimeEvent
+from coordinator import SimulatorAdapter, DiscreteEvent, DiscreteTimeEvent, EventKind
 # from ecell4 import *
 from ecell4.core import Real3, Integer3, Species, ReactionRule, GSLRandomNumberGenerator, ParticleID, Voxel, Particle
 from ecell4 import gillespie, meso, spatiocyte, egfrd, ode
@@ -73,9 +73,15 @@ class ODEEvent(DiscreteTimeEvent):
     def step(self):
         DiscreteTimeEvent.step(self)
         self.__last_reactions = self.generate_reactions()
+        self.event_kind = EventKind.REACTION_EVENT
+        # if len(self.__last_reactions) > 0:
+        #     self.event_kind = EventKind.REACTION_EVENT
+        # else:
+        #     self.event_kind = EventKind.STEP_EVENT
 
     def sync(self):
         self.__last_reactions = []
+        self.event_kind = EventKind.NO_EVENT
 
         dirty = False
         for sp in self.sim.world().list_species():
@@ -90,11 +96,14 @@ class ODEEvent(DiscreteTimeEvent):
             self.sim.initialize()
 
     def _interrupt(self, t, ri):
+        reactants = [sp for sp in ri.reactants() if self.own(sp)]
         products = [sp for sp in ri.products() if self.own(sp)]
-        if len(products) == 0:
+        if len(reactants) == 0 and len(products) == 0:
             return False
         self.sim.step(t)
         assert self.sim.t() == t
+        for sp in reactants:
+            self.sim.world().remove_molecules(sp, 1)
         for sp in products:
             self.sim.world().add_molecules(sp, 1)
         return True
@@ -115,9 +124,6 @@ class ODEEvent(DiscreteTimeEvent):
                 for i in range(int(value)):
                     retval.append((rr, ri))
         return retval
-
-    def updated(self):
-        return len(self.__last_reactions) > 0
 
 # class GillespieWorldAdapter:
 # 
@@ -143,7 +149,19 @@ class GillespieSimulatorAdapter(SimulatorAdapter):
 
     def last_reactions(self):
         if isinstance(self.rhs.sim, (ode.ODESimulator, gillespie.GillespieSimulator)):
-            return self.lhs.sim.last_reactions()
+            def convert(ri):
+                reactants = ri.reactants()
+                if len(reactants) < 2:
+                    return ri
+                else:
+                    assert len(reactants) == 2
+                    sp = self.lhs.owe(reactants[1])
+                    if sp is None or not self.rhs.own(sp):
+                        return ri
+                    else:
+                        reactants[1] = sp
+                        return gillespie.ReactionInfo(ri.t(), reactants, ri.products())
+            return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
         elif isinstance(self.rhs.sim, meso.MesoscopicSimulator):
             def convert(ri):
                 reactants = ri.reactants()
@@ -258,6 +276,7 @@ class GillespieEvent(DiscreteEvent):
     def _mirror(self, t, interrupter, src, dst):
         w = interrupter.sim.world()
         value1 = w.get_value_exact(src)
+        assert value1 >= 0
         value2 = self.sim.world().get_value_exact(dst)
         if value1 != value2:
             self.sim.step(t)

@@ -6,7 +6,7 @@ from ecell4.core import Real3, Integer3, Species
 from ecell4 import gillespie, meso, spatiocyte, egfrd, ode
 from ecell4.util import species_attributes, reaction_rules, get_model
 
-import coordinator
+from coordinator import Coordinator, EventKind
 from implementations import simulator_event, ODEEvent
 
 
@@ -66,7 +66,7 @@ def test1():
     # w4.add_molecules(Species("D1"), 60)
     # w5.add_molecules(Species("E1"), 60)
 
-    owner = coordinator.Coordinator()
+    owner = Coordinator()
     owner.add_event(simulator_event(sim1)).add(('A1', 'A2'))
     owner.add_event(simulator_event(sim2)).add(('B1', 'B2'))
     owner.add_event(simulator_event(sim3)).add(('C1', 'C2'))
@@ -92,7 +92,7 @@ def test1():
 
     log(owner)
     while owner.step(3):
-        if owner.last_event.updated():
+        if owner.last_event.event_kind == EventKind.REACTION_EVENT:
             log(owner)
 
     import matplotlib
@@ -133,7 +133,7 @@ def test2():
     # w1.add_molecules(Species("A1"), 60)
     # w2.add_molecules(Species("E1"), 60)
 
-    owner = coordinator.Coordinator()
+    owner = Coordinator()
     owner.add_event(simulator_event(sim1)).add(('A1', 'A2'))
     owner.add_event(ODEEvent(sim2, 0.01)).add(('E1', 'E2'))
     owner.initialize()
@@ -151,7 +151,7 @@ def test2():
 
     log(owner)
     while owner.step(50):
-        if owner.last_event.updated():
+        if owner.last_event.event_kind == EventKind.REACTION_EVENT:
             log(owner)
 
     import matplotlib
@@ -192,14 +192,18 @@ def test3():
     # w2 = spatiocyte.SpatiocyteWorld(edge_lengths, radius)
     # w2.bind_to(m)
     # sim2 = spatiocyte.SpatiocyteSimulator(w2)
-    w2 = egfrd.EGFRDWorld(edge_lengths, Integer3(4, 4, 4))
+    # w2 = egfrd.EGFRDWorld(edge_lengths, Integer3(4, 4, 4))
+    # w2.bind_to(m)
+    # sim2 = egfrd.EGFRDSimulator(w2)
+    w2 = ode.ODEWorld(edge_lengths)
     w2.bind_to(m)
-    sim2 = egfrd.EGFRDSimulator(w2)
+    sim2 = ode.ODESimulator(w2)
+    sim2.set_dt(0.01)
 
     w1.add_molecules(Species("A1"), 60)
     w2.add_molecules(Species("B1"), 60)
 
-    owner = coordinator.Coordinator()
+    owner = Coordinator()
     ev1 = simulator_event(sim1)
     ev1.add(('A1', 'A2'))
     ev1.borrow('B2', 'B2_')
@@ -216,12 +220,13 @@ def test3():
             owner.get_value(Species("B1")),
             owner.get_value(Species("B2")),
             owner.get_value(Species("B3")),
+            w1.get_value_exact(Species("B2_")),
             ))
 
     log(owner)
     while owner.step(10):
     # while owner.step(50):
-        if owner.last_event.updated():
+        if owner.last_event.event_kind == EventKind.REACTION_EVENT:
             log(owner)
 
     import matplotlib
@@ -237,6 +242,6 @@ def test3():
 
 
 if __name__ == "__main__":
-    # test1()
+    test1()
     # test2()
-    test3()
+    # test3()
