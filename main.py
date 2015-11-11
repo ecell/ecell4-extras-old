@@ -107,7 +107,7 @@ def test1():
 
     # for ev in owner.events:
     #     print('=> {}, {}'.format(ev.t(), ev.num_steps()))
-    #     print([ev.sim.world().num_molecules_exact(Species(name))
+    #     print([ev.world.num_molecules_exact(Species(name))
     #            for name in ("A1", "A2", "B1", "B2", "C1", "C2", "D1", "D2", "C1_")])
     numpy.savetxt("result.txt", data)
 
@@ -189,16 +189,16 @@ def test3():
     # w2 = meso.MesoscopicWorld(edge_lengths, Integer3(9, 9, 9))
     # w2.bind_to(m)
     # sim2 = meso.MesoscopicSimulator(w2)
-    # w2 = spatiocyte.SpatiocyteWorld(edge_lengths, radius)
-    # w2.bind_to(m)
-    # sim2 = spatiocyte.SpatiocyteSimulator(w2)
+    w2 = spatiocyte.SpatiocyteWorld(edge_lengths, radius)
+    w2.bind_to(m)
+    sim2 = spatiocyte.SpatiocyteSimulator(w2)
     # w2 = egfrd.EGFRDWorld(edge_lengths, Integer3(4, 4, 4))
     # w2.bind_to(m)
     # sim2 = egfrd.EGFRDSimulator(w2)
-    w2 = ode.ODEWorld(edge_lengths)
-    w2.bind_to(m)
-    sim2 = ode.ODESimulator(w2)
-    sim2.set_dt(0.01)
+    # w2 = ode.ODEWorld(edge_lengths)
+    # w2.bind_to(m)
+    # sim2 = ode.ODESimulator(w2)
+    # sim2.set_dt(0.01)
 
     w1.add_molecules(Species("A1"), 60)
     w2.add_molecules(Species("B1"), 60)
@@ -240,8 +240,72 @@ def test3():
     plt.savefig('result.eps')
     numpy.savetxt("result.txt", data)
 
+def test4():
+    D, radius = 1, 0.005
+    edge_lengths = Real3(1, 1, 1)
+
+    with species_attributes():
+        A1 | A2 | B1 | B2 | {"D": str(D), "radius": str(radius)}
+
+    with reaction_rules():
+        A1 + B1_ > B2 | 0.04483455086786913 > B1 + A2 | 1.35
+        B2 > B1 + A1 | 1.5
+
+    m = get_model()
+
+    w1 = meso.MesoscopicWorld(edge_lengths, Integer3(9, 9, 9))
+    w1.bind_to(m)
+    sim1 = meso.MesoscopicSimulator(w1)
+
+    w2 = spatiocyte.SpatiocyteWorld(edge_lengths, radius)
+    w2.bind_to(m)
+    sim2 = spatiocyte.SpatiocyteSimulator(w2)
+    # w2 = egfrd.EGFRDWorld(edge_lengths, Integer3(4, 4, 4))
+    # w2.bind_to(m)
+    # sim2 = egfrd.EGFRDSimulator(w2)
+
+    w1.add_molecules(Species("A1"), 120)
+    w2.add_molecules(Species("B1"), 60)
+
+    owner = Coordinator()
+    ev1 = simulator_event(sim1)
+    ev1.add(('A1', 'A2'))
+    ev1.borrow('B1', 'B1_')
+    owner.add_event(ev1)
+    owner.add_event(simulator_event(sim2)).add(('B1', 'B2'))
+    owner.initialize()
+
+    data = []
+    def log(owner):
+        data.append((
+            owner.t(),
+            owner.get_value(Species("A1")),
+            owner.get_value(Species("A2")),
+            owner.get_value(Species("B1")),
+            owner.get_value(Species("B2")),
+            w1.num_molecules_exact(Species("B1_")),
+            ))
+
+    log(owner)
+    while owner.step(1):
+        if owner.last_event.event_kind == EventKind.REACTION_EVENT:
+            log(owner)
+    log(owner)
+
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pylab as plt
+
+    data = numpy.asarray(data)
+    for i in range(1, 6):
+        plt.plot(data.T[0], data.T[i], '-')
+    # plt.show()
+    plt.savefig('result.eps')
+    numpy.savetxt("result.txt", data)
+
 
 if __name__ == "__main__":
     test1()
     # test2()
     # test3()
+    # test4()

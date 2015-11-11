@@ -11,6 +11,9 @@ class SimulatorAdapter:
         self.lhs = lhs
         self.rhs = rhs
 
+    def world(self):
+        return self.lhs.world
+
     # def __getattr__(self, name):
     #     return getattr(self.lhs.sim, name)
 
@@ -22,6 +25,7 @@ class SimulatorEvent:
 
     def __init__(self, sim):
         self.sim = sim
+        self.world = self.sim.world()
         self.event_kind = EventKind.NO_EVENT
         self.__belongings = set()
         self.__borrowings = dict()
@@ -64,7 +68,7 @@ class SimulatorEvent:
         return self.sim.num_steps()
 
     def interrupt(self, t, interrupter, event_kind=EventKind.NO_EVENT):
-        if event_kind == EventKind.NO_EVENT:
+        if event_kind == EventKind.STOP_EVENT:
             assert interrupter is None
             self.sim.step(t)
             assert self.sim.t() == t
@@ -72,7 +76,8 @@ class SimulatorEvent:
 
         dirty = False
 
-        if event_kind in (EventKind.REACTION_EVENT, EventKind.UPDATE_EVENT):
+        if event_kind in (EventKind.REACTION_EVENT, EventKind.UPDATE_EVENT,
+                          EventKind.STEP_EVENT):
             for dst, src in self.__borrowings.items():
                 if not interrupter.own(src):
                     continue
@@ -144,7 +149,7 @@ class Coordinator:
         value = 0.0
         for ev in self.events:
             if ev.own(sp):
-                value += ev.sim.world().get_value_exact(sp)
+                value += ev.world.get_value_exact(sp)
         return value
 
     def add_event(self, ev):
