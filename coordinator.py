@@ -145,6 +145,11 @@ class Coordinator:
     def t(self):
         return self.__t
 
+    def set_value(self, sp, value):
+        for ev in self.events:
+            if ev.own(sp):
+                ev.world.set_value(sp, value)
+
     def get_value(self, sp):
         value = 0.0
         for ev in self.events:

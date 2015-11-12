@@ -59,19 +59,20 @@ def test1():
     w5.bind_to(m)
     sim5 = ode.ODESimulator(w5)
 
-    w1.add_molecules(Species("A1"), 300)
-    # w1.add_molecules(Species("A1"), 60)
-    # w2.add_molecules(Species("B1"), 60)
-    # w3.add_molecules(Species("C1"), 60)
-    # w4.add_molecules(Species("D1"), 60)
-    # w5.add_molecules(Species("E1"), 60)
-
     owner = Coordinator()
     owner.add_event(simulator_event(sim1)).add(('A1', 'A2'))
     owner.add_event(simulator_event(sim2)).add(('B1', 'B2'))
     owner.add_event(simulator_event(sim3)).add(('C1', 'C2'))
     owner.add_event(simulator_event(sim4)).add(('D1', 'D2'))
     owner.add_event(ODEEvent(sim5, 0.01)).add(('E1', 'E2'))
+
+    owner.set_value(Species("A1"), 300)
+    # owner.set_value(Species("A1"), 60)
+    # owner.set_value(Species("B1"), 60)
+    # owner.set_value(Species("C1"), 60)
+    # owner.set_value(Species("D1"), 60)
+    # owner.set_value(Species("E1"), 60)
+
     owner.initialize()
 
     data = []
@@ -129,13 +130,12 @@ def test2():
     w2.bind_to(m)
     sim2 = ode.ODESimulator(w2)
 
-    w1.add_molecules(Species("A1"), 120)
-    # w1.add_molecules(Species("A1"), 60)
-    # w2.add_molecules(Species("E1"), 60)
-
     owner = Coordinator()
     owner.add_event(simulator_event(sim1)).add(('A1', 'A2'))
     owner.add_event(ODEEvent(sim2, 0.01)).add(('E1', 'E2'))
+    owner.set_value(Species("A1"), 120)
+    # owner.set_value(Species("A1"), 60)
+    # owner.set_value(Species("E1"), 60)
     owner.initialize()
 
     data = []
@@ -200,15 +200,14 @@ def test3():
     sim2 = ode.ODESimulator(w2)
     sim2.set_dt(0.01)
 
-    w1.add_molecules(Species("A1"), 60)
-    w2.add_molecules(Species("B1"), 60)
-
     owner = Coordinator()
     ev1 = simulator_event(sim1)
     ev1.add(('A1', 'A2'))
     ev1.borrow('B2', 'B2_')
     owner.add_event(ev1)
     owner.add_event(simulator_event(sim2)).add(('B1', 'B2', 'B3'))
+    owner.set_value(Species("A1"), 60)
+    owner.set_value(Species("B1"), 60)
     owner.initialize()
 
     data = []
@@ -335,10 +334,6 @@ def test4():
     # w2.bind_to(m)
     # sim2 = egfrd.EGFRDSimulator(w2)
 
-    w1.add_molecules(Species("A1"), 120)
-    w2.add_molecules(Species("B1"), 30)
-    w1.add_molecules(Species("C1"), 30)
-
     owner = Coordinator()
     ev1 = simulator_event(sim1)
     ev1.add(('A1', 'A2', 'A3'))
@@ -346,6 +341,9 @@ def test4():
     ev1.borrow('B1', 'B1_')
     owner.add_event(ev1)
     owner.add_event(simulator_event(sim2)).add(('B1', 'B2', 'B3'))
+    owner.set_value(Species("A1"), 120)
+    owner.set_value(Species("B1"), 30)
+    owner.set_value(Species("C1"), 30)
     owner.initialize()
 
     data = []
@@ -382,7 +380,7 @@ def test4():
     numpy.savetxt("result.txt", data)
 
 if __name__ == "__main__":
-    # test1()
+    test1()
     # test2()
     # test3()
-    test4()
+    # test4()
