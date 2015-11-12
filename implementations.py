@@ -318,10 +318,10 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
         elif isinstance(self.rhs.sim, spatiocyte.SpatiocyteSimulator):
             def convert(ri):
                 reactants = ri.reactants()
+                g = self.lhs.world.coord2global(ri.coordinate())
+                rng = self.lhs.world.rng()
+                lengths = self.lhs.world.subvolume_edge_lengths()
                 if len(reactants) < 2:
-                    g = self.lhs.world.coord2global(ri.coordinate())
-                    rng = self.lhs.world.rng()
-                    lengths = self.lhs.world.subvolume_edge_lengths()
                     pos = Real3((g[0] + rng.uniform(0, 1)) * lengths[0],
                                 (g[1] + rng.uniform(0, 1)) * lengths[1],
                                 (g[2] + rng.uniform(0, 1)) * lengths[2])
@@ -336,9 +336,6 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
                     assert len(reactants) == 2
                     sp = self.lhs.owe(reactants[1])
                     if sp is None or not self.rhs.own(sp):
-                        g = self.lhs.world.coord2global(ri.coordinate())
-                        rng = self.lhs.world.rng()
-                        lengths = self.lhs.world.subvolume_edge_lengths()
                         pos = Real3((g[0] + rng.uniform(0, 1)) * lengths[0],
                                     (g[1] + rng.uniform(0, 1)) * lengths[1],
                                     (g[2] + rng.uniform(0, 1)) * lengths[2])
@@ -351,7 +348,6 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
                                      for sp in ri.products()]
                     else:
                         voxels = [(pid, v) for pid, v in self.rhs.world.list_voxels_exact(sp) if self.lhs.world.position2coordinate(self.rhs.world.coordinate2position(v.coordinate())) == ri.coordinate()]
-                        rng = self.lhs.world.rng()
                         v = voxels[rng.uniform_int(0, len(voxels) - 1)]
                         reactants = [(ParticleID(), Voxel(ri.reactants()[0], v[1].coordinate(), 0, 0)), v]
                         products = [(ParticleID(), Voxel(sp, v[1].coordinate(), 0, 0))
@@ -360,16 +356,35 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
         elif isinstance(self.rhs.sim, egfrd.EGFRDSimulator):
             def convert(ri):
+                reactants = ri.reactants()
                 g = self.lhs.world.coord2global(ri.coordinate())
                 rng = self.lhs.world.rng()
                 lengths = self.lhs.world.subvolume_edge_lengths()
-                pos = Real3((g[0] + rng.uniform(0, 1)) * lengths[0],
-                            (g[1] + rng.uniform(0, 1)) * lengths[1],
-                            (g[2] + rng.uniform(0, 1)) * lengths[2])
-                reactants = [(ParticleID(), Particle(sp, pos, 0, 0))
-                             for sp in ri.reactants()]
-                products = [(ParticleID(), Particle(sp, pos, 0, 0))
-                             for sp in ri.products()]
+                if len(reactants) < 2:
+                    pos = Real3((g[0] + rng.uniform(0, 1)) * lengths[0],
+                                (g[1] + rng.uniform(0, 1)) * lengths[1],
+                                (g[2] + rng.uniform(0, 1)) * lengths[2])
+                    reactants = [(ParticleID(), Particle(sp, pos, 0, 0))
+                                 for sp in ri.reactants()]
+                    products = [(ParticleID(), Particle(sp, pos, 0, 0))
+                                 for sp in ri.products()]
+                else:
+                    assert len(reactants) == 2
+                    sp = self.lhs.owe(reactants[1])
+                    if sp is None or not self.rhs.own(sp):
+                        pos = Real3((g[0] + rng.uniform(0, 1)) * lengths[0],
+                                    (g[1] + rng.uniform(0, 1)) * lengths[1],
+                                    (g[2] + rng.uniform(0, 1)) * lengths[2])
+                        reactants = [(ParticleID(), Particle(sp, pos, 0, 0))
+                                     for sp in ri.reactants()]
+                        products = [(ParticleID(), Particle(sp, pos, 0, 0))
+                                     for sp in ri.products()]
+                    else:
+                        particles = [(pid, p) for pid, p in self.rhs.world.list_particles_exact(sp) if self.lhs.world.position2coordinate(p.position()) == ri.coordinate()]
+                        p = particles[rng.uniform_int(0, len(particles) - 1)]
+                        reactants = [(ParticleID(), Particle(sp, p[1].position(), 0, 0)), p]
+                        products = [(ParticleID(), Particle(sp, p[1].position(), 0, 0))
+                                     for sp in ri.products()]
                 return egfrd.ReactionInfo(ri.t(), reactants, products)
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
         raise ValueError("Not supported yet [{}].".format(repr(self.rhs.sim)))
@@ -528,6 +543,21 @@ class SpatiocyteEvent(DiscreteEvent):
         assert self.sim != rhs.sim
         return SpatiocyteSimulatorAdapter(self, rhs)
 
+class EGFRDWorldAdapter:
+
+    def __init__(self, lhs, rhs):
+        self.lhs = lhs
+        self.rhs = rhs
+
+    def list_coordinates_exact(self, sp):
+        coords = [self.rhs.world.position2coordinate(p.position())
+                  for pid, p in self.lhs.world.list_particles_exact(sp)]
+        coords.sort()
+        return coords
+
+    def __getattr__(self, name):
+        return getattr(self.lhs.world, name)
+
 class EGFRDSimulatorAdapter(SimulatorAdapter):
 
     def __init__(self, lhs, rhs):
@@ -560,6 +590,9 @@ class EGFRDSimulatorAdapter(SimulatorAdapter):
         elif isinstance(self.rhs.sim, egfrd.EGFRDSimulator):
             return self.lhs.sim.last_reactions()
         raise ValueError("Not supported yet [{}].".format(repr(self.rhs.sim)))
+
+    def world(self):
+        return EGFRDWorldAdapter(self.lhs, self.rhs)
 
 class EGFRDEvent(DiscreteEvent):
 
