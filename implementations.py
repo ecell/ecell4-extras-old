@@ -3,7 +3,6 @@
 import math
 import collections
 from coordinator import SimulatorAdapter, DiscreteEvent, DiscreteTimeEvent, EventKind
-# from ecell4 import *
 from ecell4.core import Real3, Integer3, Species, ReactionRule, GSLRandomNumberGenerator, ParticleID, Voxel, Particle
 from ecell4 import gillespie, meso, spatiocyte, egfrd, ode
 
@@ -125,22 +124,6 @@ class ODEEvent(DiscreteTimeEvent):
                     retval.append((rr, ri))
         return retval
 
-# class GillespieWorldAdapter:
-# 
-#     def __init__(self, lhs, rhs):
-#         self.lhs = lhs
-#         self.rhs = rhs
-# 
-#     def remove_molecules(self, sp, num, coord=None):
-#         self.lhs.remove_molecules(sp, num)
-# 
-#     def remove_voxel(self, voxel):
-#         pid, v = voxel
-#         self.lhs.remove_molecules(v.species(), 1)
-# 
-#     def __getattr__(self, name):
-#         return getattr(self.lhs, name)
-
 class GillespieSimulatorAdapter(SimulatorAdapter):
 
     def __init__(self, lhs, rhs):
@@ -238,9 +221,6 @@ class GillespieSimulatorAdapter(SimulatorAdapter):
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
         raise ValueError("Not supported yet.")
 
-    # def world(self):
-    #     return GillespieWorldAdapter(self.lhs.world(), self.rhs.world())
-
 class GillespieEvent(DiscreteEvent):
 
     def __init__(self, sim):
@@ -286,22 +266,6 @@ class GillespieEvent(DiscreteEvent):
     def __call__(self, rhs):
         assert self.sim != rhs.sim
         return GillespieSimulatorAdapter(self, rhs)
-
-# class MesoscopicWorldAdapter:
-# 
-#     def __init__(self, lhs, rhs):
-#         self.lhs = lhs
-#         self.rhs = rhs
-# 
-#     def remove_voxel(self, voxel):
-#         pid, v = voxel
-#         pos = self.rhs.coordinate2position(v.coordinate())
-#         coord = self.lhs.position2coordinate(pos)
-#         assert self.lhs.num_molecules(v.species(), coord) > 0
-#         self.lhs.remove_molecules(v.species(), 1, coord)
-# 
-#     def __getattr__(self, name):
-#         return getattr(self.lhs, name)
 
 class MesoscopicSimulatorAdapter(SimulatorAdapter):
 
@@ -388,9 +352,6 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
                 return egfrd.ReactionInfo(ri.t(), reactants, products)
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
         raise ValueError("Not supported yet [{}].".format(repr(self.rhs.sim)))
-
-    # def world(self):
-    #     return MesoscopicWorldAdapter(self.lhs.world(), self.rhs.world())
 
 class MesoscopicEvent(DiscreteEvent):
 
