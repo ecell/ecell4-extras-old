@@ -94,7 +94,7 @@ class ODEEvent(DiscreteTimeEvent):
         if dirty:
             self.sim.initialize()
 
-    def _interrupt(self, t, ri):
+    def apply(self, t, ri):
         reactants = [sp for sp in ri.reactants() if self.own(sp)]
         products = [sp for sp in ri.products() if self.own(sp)]
         if len(reactants) == 0 and len(products) == 0:
@@ -107,7 +107,7 @@ class ODEEvent(DiscreteTimeEvent):
             self.world.add_molecules(sp, 1)
         return True
 
-    def __call__(self, rhs):
+    def adapter(self, rhs):
         assert self.sim != rhs.sim
         return ODESimulatorAdapter(self, rhs, self.__last_reactions)
 
@@ -243,7 +243,7 @@ class GillespieEvent(DiscreteEvent):
         if dirty:
             self.sim.initialize()
 
-    def _interrupt(self, t, ri):
+    def apply(self, t, ri):
         products = [sp for sp in ri.products() if self.own(sp)]
         if len(products) == 0:
             return False
@@ -253,7 +253,7 @@ class GillespieEvent(DiscreteEvent):
             self.world.add_molecules(sp, 1)
         return True
 
-    def _mirror(self, t, interrupter, src, dst):
+    def mirror(self, t, interrupter, src, dst):
         value1 = interrupter.world.get_value_exact(src)
         assert value1 >= 0
         value2 = self.world.get_value_exact(dst)
@@ -263,7 +263,7 @@ class GillespieEvent(DiscreteEvent):
             return True
         return False
 
-    def __call__(self, rhs):
+    def adapter(self, rhs):
         assert self.sim != rhs.sim
         return GillespieSimulatorAdapter(self, rhs)
 
@@ -376,7 +376,7 @@ class MesoscopicEvent(DiscreteEvent):
         if dirty:
             self.sim.initialize()
 
-    def _interrupt(self, t, ri):
+    def apply(self, t, ri):
         reactants = [sp for sp in ri.reactants() if self.own(sp)]
         products = [sp for sp in ri.products() if self.own(sp)]
         if len(reactants) == 0 and len(products) == 0:
@@ -390,7 +390,7 @@ class MesoscopicEvent(DiscreteEvent):
             self.world.add_molecules(sp, 1, coord)
         return True
 
-    def _mirror(self, t, interrupter, src, dst):
+    def mirror(self, t, interrupter, src, dst):
         coords1 = self.world.list_coordinates_exact(dst)
         coords2 = interrupter(self).world().list_coordinates_exact(src)
         if coords1 != coords2:
@@ -408,7 +408,7 @@ class MesoscopicEvent(DiscreteEvent):
             return True
         return False
 
-    def __call__(self, rhs):
+    def adapter(self, rhs):
         assert self.sim != rhs.sim
         return MesoscopicSimulatorAdapter(self, rhs)
 
@@ -487,7 +487,7 @@ class SpatiocyteEvent(DiscreteEvent):
         if dirty:
             self.sim.initialize()
 
-    def _interrupt(self, t, ri):
+    def apply(self, t, ri):
         reactants = [(pid, v) for pid, v in ri.reactants() if self.own(v.species())]
         products = [(pid, v) for pid, v in ri.products() if self.own(v.species())]
         if len(reactants) == 0 and len(products) == 0:
@@ -500,7 +500,7 @@ class SpatiocyteEvent(DiscreteEvent):
             self.world.new_voxel(v.species(), v.coordinate())
         return True
 
-    def __call__(self, rhs):
+    def adapter(self, rhs):
         assert self.sim != rhs.sim
         return SpatiocyteSimulatorAdapter(self, rhs)
 
@@ -577,7 +577,7 @@ class EGFRDEvent(DiscreteEvent):
         if dirty:
             self.sim.initialize()
 
-    def _interrupt(self, t, ri):
+    def apply(self, t, ri):
         reactants = [(pid, p) for pid, p in ri.reactants() if self.own(p.species())]
         products = [(pid, p) for pid, p in ri.products() if self.own(p.species())]
         if len(reactants) == 0 and len(products) == 0:
@@ -590,6 +590,6 @@ class EGFRDEvent(DiscreteEvent):
             self.world.new_particle(p.species(), p.position())
         return True
 
-    def __call__(self, rhs):
+    def adapter(self, rhs):
         assert self.sim != rhs.sim
         return EGFRDSimulatorAdapter(self, rhs)

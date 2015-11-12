@@ -87,27 +87,30 @@ class SimulatorEvent:
             for dst, src in self.__borrowings.items():
                 if not interrupter.own(src):
                     continue
-                if self._mirror(t, interrupter, src, dst):
+                if self.mirror(t, interrupter, src, dst):
                     dirty = True
 
         if event_kind == EventKind.REACTION_EVENT:
             last_reactions = interrupter(self).last_reactions()
             for rr in last_reactions:
-                if self._interrupt(t, rr[1]):
+                if self.apply(t, rr[1]):
                     dirty = True
 
         if dirty:
             self.sim.initialize()
         return dirty
 
-    def _mirror(self, t, interrupter, src, dst):
+    def mirror(self, t, interrupter, src, dst):
         raise RuntimeError('Not implemented yet [{}].'.format(repr(self)))
 
-    def _interrupt(self, t, ri):
+    def apply(self, t, ri):
+        raise RuntimeError('Not implemented yet [{}].'.format(repr(self)))
+
+    def adapter(self, rhs):
         raise RuntimeError('Not implemented yet [{}].'.format(repr(self)))
 
     def __call__(self, rhs):
-        raise RuntimeError('Not implemented yet [{}].'.format(repr(self)))
+        return self.adapter(rhs)
 
 class DiscreteEvent(SimulatorEvent):
 
