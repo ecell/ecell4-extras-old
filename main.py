@@ -304,6 +304,83 @@ def test4():
     numpy.savetxt("result.txt", data)
 
 
+def test4():
+    D, radius = 1, 0.005
+    edge_lengths = Real3(1, 1, 1)
+
+    with species_attributes():
+        A1 | A2 | B1 | B2 | B3 | C1 | C2 | C3 | {"D": str(D), "radius": str(radius)}
+
+    with reaction_rules():
+        A1 + B1_ > B2 | 0.04483455086786913 > A1 + B1 | 1.35
+        B2 > A2 + B1 | 1.5
+        A2 + B1_ > B3 | 0.09299017957780264 > A2 + B1 | 1.73
+        B3 > A3 + B1 | 15.0
+
+        A3 + C1_ > C2 | 0.04483455086786913 > A3 + C1 | 1.35
+        C2 > A2 + C1 | 1.5
+        A2 + C1_ > C3 | 0.09299017957780264 > A2 + C1 | 1.73
+        C3 > A1 + C1 | 15.0
+
+    m = get_model()
+
+    w1 = meso.MesoscopicWorld(edge_lengths, Integer3(9, 9, 9))
+    w1.bind_to(m)
+    sim1 = meso.MesoscopicSimulator(w1)
+
+    w2 = spatiocyte.SpatiocyteWorld(edge_lengths, radius)
+    w2.bind_to(m)
+    sim2 = spatiocyte.SpatiocyteSimulator(w2)
+    # w2 = egfrd.EGFRDWorld(edge_lengths, Integer3(4, 4, 4))
+    # w2.bind_to(m)
+    # sim2 = egfrd.EGFRDSimulator(w2)
+
+    w1.add_molecules(Species("A1"), 120)
+    w2.add_molecules(Species("B1"), 30)
+    w1.add_molecules(Species("C1"), 30)
+
+    owner = Coordinator()
+    ev1 = simulator_event(sim1)
+    ev1.add(('A1', 'A2', 'A3'))
+    ev1.add(('C1', 'C2', 'C3'))
+    ev1.borrow('B1', 'B1_')
+    owner.add_event(ev1)
+    owner.add_event(simulator_event(sim2)).add(('B1', 'B2', 'B3'))
+    owner.initialize()
+
+    data = []
+    def log(owner):
+        data.append((
+            owner.t(),
+            owner.get_value(Species("A1")),
+            owner.get_value(Species("A2")),
+            owner.get_value(Species("A3")),
+            owner.get_value(Species("B1")),
+            owner.get_value(Species("B2")),
+            owner.get_value(Species("B3")),
+            owner.get_value(Species("C1")),
+            owner.get_value(Species("C2")),
+            owner.get_value(Species("C3")),
+            w1.num_molecules_exact(Species("B1_")),
+            ))
+
+    log(owner)
+    while owner.step(1):
+        if owner.last_event.event_kind == EventKind.REACTION_EVENT:
+            log(owner)
+    log(owner)
+
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pylab as plt
+
+    data = numpy.asarray(data)
+    for i in range(1, 6):
+        plt.plot(data.T[0], data.T[i], '-')
+    # plt.show()
+    plt.savefig('result.eps')
+    numpy.savetxt("result.txt", data)
+
 if __name__ == "__main__":
     # test1()
     # test2()
