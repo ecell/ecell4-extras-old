@@ -8,6 +8,7 @@ from ecell4.util import species_attributes, reaction_rules, get_model
 
 from coordinator import Coordinator, EventKind
 from implementations import simulator_event, ODEEvent
+from logger import Logger
 
 
 def test1():
@@ -58,13 +59,14 @@ def test1():
     w5 = ode.ODEWorld(edge_lengths)
     w5.bind_to(m)
     sim5 = ode.ODESimulator(w5)
+    sim5.set_dt(0.01)
 
     owner = Coordinator()
     owner.add_event(simulator_event(sim1)).add(('A1', 'A2'))
     owner.add_event(simulator_event(sim2)).add(('B1', 'B2'))
     owner.add_event(simulator_event(sim3)).add(('C1', 'C2'))
     owner.add_event(simulator_event(sim4)).add(('D1', 'D2'))
-    owner.add_event(ODEEvent(sim5, 0.01)).add(('E1', 'E2'))
+    owner.add_event(simulator_event(sim5)).add(('E1', 'E2'))
 
     owner.set_value(Species("A1"), 300)
     # owner.set_value(Species("A1"), 60)
@@ -75,42 +77,16 @@ def test1():
 
     owner.initialize()
 
-    data = []
-    def log(owner):
-        data.append((
-            owner.t(),
-            owner.get_value(Species("A1")),
-            owner.get_value(Species("A2")),
-            owner.get_value(Species("B1")),
-            owner.get_value(Species("B2")),
-            owner.get_value(Species("C1")),
-            owner.get_value(Species("C2")),
-            owner.get_value(Species("D1")),
-            owner.get_value(Species("D2")),
-            owner.get_value(Species("E1")),
-            owner.get_value(Species("E2")),
-            ))
+    logger = Logger(owner, ("A1", "A2", "B1", "B2", "C1", "C2", "D1", "D2", "E1", "E2"))
 
-    log(owner)
+    logger.log()
     while owner.step(3):
         if owner.last_event.event_kind == EventKind.REACTION_EVENT:
-            log(owner)
+            logger.log()
+    logger.log()
 
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pylab as plt
-
-    data = numpy.asarray(data)
-    for i in range(1, 11):
-        plt.plot(data.T[0], data.T[i], '-')
-    # plt.show()
-    plt.savefig('result.eps')
-
-    # for ev in owner.events:
-    #     print('=> {}, {}'.format(ev.t(), ev.num_steps()))
-    #     print([ev.world.num_molecules_exact(Species(name))
-    #            for name in ("A1", "A2", "B1", "B2", "C1", "C2", "D1", "D2", "C1_")])
-    numpy.savetxt("result.txt", data)
+    logger.savefig()
+    logger.savetxt()
 
 def test2():
     edge_lengths = Real3(1, 1, 1)
@@ -138,32 +114,16 @@ def test2():
     # owner.set_value(Species("E1"), 60)
     owner.initialize()
 
-    data = []
-    def log(owner):
-        data.append((
-            owner.t(),
-            owner.get_value(Species("A1")),
-            owner.get_value(Species("A2")),
-            owner.get_value(Species("E1")),
-            owner.get_value(Species("E2")),
-            w2.get_value_exact(Species("A1")),
-            ))
+    logger = Logger(owner, ("A1", "A2", "E1", "E2"))
+    logger.add("A1", w2)
 
-    log(owner)
+    logger.log()
     while owner.step(50):
         if owner.last_event.event_kind == EventKind.REACTION_EVENT:
-            log(owner)
+            logger.log()
 
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pylab as plt
-
-    data = numpy.asarray(data)
-    for i in range(1, 6):
-        plt.plot(data.T[0], data.T[i], '-')
-    # plt.show()
-    plt.savefig('result.eps')
-    numpy.savetxt("result.txt", data)
+    logger.savefig()
+    logger.savetxt()
 
 def test3():
     D, radius = 1, 0.005
@@ -210,34 +170,18 @@ def test3():
     owner.set_value(Species("B1"), 60)
     owner.initialize()
 
-    data = []
-    def log(owner):
-        data.append((
-            owner.t(),
-            owner.get_value(Species("A1")),
-            owner.get_value(Species("A2")),
-            owner.get_value(Species("B1")),
-            owner.get_value(Species("B2")),
-            owner.get_value(Species("B3")),
-            w1.get_value_exact(Species("B2_")),
-            ))
+    logger = Logger(owner, ("A1", "A2", "B1", "B2", "B3"))
+    logger.add("B2_", w1)
 
-    log(owner)
+    logger.log()
     while owner.step(10):
     # while owner.step(50):
         if owner.last_event.event_kind == EventKind.REACTION_EVENT:
-            log(owner)
+            logger.log()
+    logger.log()
 
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pylab as plt
-
-    data = numpy.asarray(data)
-    for i in range(1, 6):
-        plt.plot(data.T[0], data.T[i], '-')
-    # plt.show()
-    plt.savefig('result.eps')
-    numpy.savetxt("result.txt", data)
+    logger.savefig()
+    logger.savetxt()
 
 def test4():
     D, radius = 1, 0.005
@@ -274,34 +218,17 @@ def test4():
     owner.add_event(simulator_event(sim2)).add(('B1', 'B2'))
     owner.initialize()
 
-    data = []
-    def log(owner):
-        data.append((
-            owner.t(),
-            owner.get_value(Species("A1")),
-            owner.get_value(Species("A2")),
-            owner.get_value(Species("B1")),
-            owner.get_value(Species("B2")),
-            w1.num_molecules_exact(Species("B1_")),
-            ))
+    logger = Logger(owner, ("A1", "A2", "B1", "B2"))
+    logger.add("B1_", w1)
 
-    log(owner)
+    logger.log()
     while owner.step(1):
         if owner.last_event.event_kind == EventKind.REACTION_EVENT:
-            log(owner)
-    log(owner)
+            logger.log()
+    logger.log()
 
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pylab as plt
-
-    data = numpy.asarray(data)
-    for i in range(1, 6):
-        plt.plot(data.T[0], data.T[i], '-')
-    # plt.show()
-    plt.savefig('result.eps')
-    numpy.savetxt("result.txt", data)
-
+    logger.savefig()
+    logger.savetxt()
 
 def test4():
     D, radius = 1, 0.005
@@ -316,9 +243,9 @@ def test4():
         A2 + B1_ > B3 | 0.09299017957780264 > A2 + B1 | 1.73
         B3 > A3 + B1 | 15.0
 
-        A3 + C1_ > C2 | 0.04483455086786913 > A3 + C1 | 1.35
+        A3 + C1 > C2 | 0.04483455086786913 > A3 + C1 | 1.35
         C2 > A2 + C1 | 1.5
-        A2 + C1_ > C3 | 0.09299017957780264 > A2 + C1 | 1.73
+        A2 + C1 > C3 | 0.09299017957780264 > A2 + C1 | 1.73
         C3 > A1 + C1 | 15.0
 
     m = get_model()
@@ -346,41 +273,21 @@ def test4():
     owner.set_value(Species("C1"), 30)
     owner.initialize()
 
-    data = []
-    def log(owner):
-        data.append((
-            owner.t(),
-            owner.get_value(Species("A1")),
-            owner.get_value(Species("A2")),
-            owner.get_value(Species("A3")),
-            owner.get_value(Species("B1")),
-            owner.get_value(Species("B2")),
-            owner.get_value(Species("B3")),
-            owner.get_value(Species("C1")),
-            owner.get_value(Species("C2")),
-            owner.get_value(Species("C3")),
-            w1.num_molecules_exact(Species("B1_")),
-            ))
+    logger = Logger(owner, ("A1", "A2", "A3", "B1", "B2", "B3", "C1", "C2", "C3"))
+    logger.add("B1_", w1)
 
-    log(owner)
+    logger.log()
     while owner.step(1):
         if owner.last_event.event_kind == EventKind.REACTION_EVENT:
-            log(owner)
-    log(owner)
+            logger.log()
+    logger.log()
 
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pylab as plt
+    logger.savefig()
+    logger.savetxt()
 
-    data = numpy.asarray(data)
-    for i in range(1, 6):
-        plt.plot(data.T[0], data.T[i], '-')
-    # plt.show()
-    plt.savefig('result.eps')
-    numpy.savetxt("result.txt", data)
 
 if __name__ == "__main__":
-    test1()
+    # test1()
     # test2()
     # test3()
-    # test4()
+    test4()

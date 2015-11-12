@@ -58,6 +58,12 @@ class SimulatorEvent:
     def owe(self, sp):
         return self.__borrowings.get(sp, None)
 
+    def belongings(self):
+        return tuple(self.__belongings)
+
+    def borrowings(self):
+        return tuple(self.__borrowings.keys())
+
     def initialize(self):
         self.sim.initialize()
 
