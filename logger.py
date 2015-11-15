@@ -35,13 +35,20 @@ class Logger:
             else:
                 self.__data[(sp, w)].append(w.get_value_exact(sp))
 
-    def savefig(self, filename="result.eps"):
+    def savefig(
+            self, filename="result.eps",
+            legend=True, xlabel='Time', ylabel='The Number of Molecules'):
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pylab as plt
 
         for (sp, w), data in self.__data.items():
             plt.plot(self.__t, data, '-', label=sp.serial())
+        if legend:
+            plt.legend(loc='best', shadow=True)
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.xlim(self.__t[0], self.__t[-1])
         plt.savefig(filename)
         plt.clf()
 
