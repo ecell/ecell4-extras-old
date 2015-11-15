@@ -285,9 +285,46 @@ def test4():
     logger.savefig()
     logger.savetxt()
 
+def test5():
+    edge_lengths = Real3(1, 1, 1)
+
+    with reaction_rules():
+        A1 == A2 | (1.0, 1.0)
+        B1 == B2 | (1.0, 1.0)
+        A1 == B1 | (1.0, 1.0)
+
+    m = get_model()
+
+    w1 = meso.MesoscopicWorld(edge_lengths, Integer3(3, 3, 3))
+    w1.bind_to(m)
+    sim1 = meso.MesoscopicSimulator(w1)
+
+    w2 = meso.MesoscopicWorld(edge_lengths, Integer3(9, 9, 9))
+    w2.bind_to(m)
+    sim2 = meso.MesoscopicSimulator(w2)
+
+    owner = Coordinator()
+    owner.add_event(simulator_event(sim1)).add(('A1', 'A2'))
+    owner.add_event(simulator_event(sim2)).add(('B1', 'B2'))
+    owner.set_value(Species("A1"), 120)
+    # owner.set_value(Species("A1"), 60)
+    # owner.set_value(Species("B1"), 60)
+    owner.initialize()
+
+    logger = Logger(owner, ("A1", "A2", "B1", "B2"))
+
+    logger.log()
+    while owner.step(5):
+        if owner.last_event.event_kind == EventKind.REACTION_EVENT:
+            logger.log()
+
+    logger.savefig()
+    logger.savetxt()
+
 
 if __name__ == "__main__":
     # test1()
     # test2()
     # test3()
-    test4()
+    # test4()
+    test5()

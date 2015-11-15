@@ -275,7 +275,16 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
 
     def last_reactions(self):
         if isinstance(self.rhs.sim, meso.MesoscopicSimulator):
-            return self.lhs.sim.last_reactions()
+            ratios = [
+                float(y) / float(x)
+                for x, y in zip(self.lhs.world.matrix_sizes(), self.rhs.world.matrix_sizes())]
+            rng = self.lhs.world.rng()
+            def convert(coord):
+                g1 = self.lhs.world.coord2global(coord)
+                g2 = Integer3(*[int(rng.uniform(g1[i] * ratios[i], (g1[i] + 1) * ratios[i])) for i in range(3)])
+                return self.rhs.world.global2coord(g2)
+            return [(rr, meso.ReactionInfo(ri.t(), ri.reactants(), ri.products(), convert(ri.coordinate())))
+                    for (rr, ri) in self.lhs.sim.last_reactions()]
         elif isinstance(self.rhs.sim, (ode.ODESimulator, gillespie.GillespieSimulator)):
             return [(rr, gillespie.ReactionInfo(ri.t(), ri.reactants(), ri.products()))
                     for (rr, ri) in self.lhs.sim.last_reactions()]
@@ -419,6 +428,7 @@ class SpatiocyteWorldAdapter:
         self.rhs = rhs
 
     def list_coordinates_exact(self, sp):
+        assert isinstance(self.rhs.world, meso.MesoscopicWorld)
         coords = [self.rhs.world.position2coordinate(
                       self.lhs.world.coordinate2position(v.coordinate()))
                   for pid, v in self.lhs.world.list_voxels_exact(sp)]
@@ -436,7 +446,8 @@ class SpatiocyteSimulatorAdapter(SimulatorAdapter):
 
     def last_reactions(self):
         if isinstance(self.rhs.sim, spatiocyte.SpatiocyteSimulator):
-            return self.lhs.sim.last_reactions()
+            raise RuntimeError("Not supported yet.")
+            # return self.lhs.sim.last_reactions()
         elif isinstance(self.rhs.sim, (ode.ODESimulator, gillespie.GillespieSimulator)):
             def convert(ri):
                 reactants = [v.species() for pid, v in ri.reactants()]
@@ -511,6 +522,7 @@ class EGFRDWorldAdapter:
         self.rhs = rhs
 
     def list_coordinates_exact(self, sp):
+        assert isinstance(self.rhs.world, meso.MesoscopicWorld)
         coords = [self.rhs.world.position2coordinate(p.position())
                   for pid, p in self.lhs.world.list_particles_exact(sp)]
         coords.sort()
