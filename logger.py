@@ -19,10 +19,10 @@ class Logger:
                 return
             self.__data[(value1, value2)] = [0] * len(self.__t)
         elif isinstance(value1, str):
-            self.add(Species(value1))
+            self.add(Species(value1), value2)
         elif isinstance(value1, collections.Iterable):
             for sp in value1:
-                self.add(sp)
+                self.add(sp, value2)
         else:
             raise ValueError(
                 'an invalid argument [{}] was given.'.format(repr(value1)))
