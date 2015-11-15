@@ -293,6 +293,9 @@ def test5():
         B1 == B2 | (1.0, 1.0)
         A1 == B1 | (1.0, 1.0)
 
+        A2 + B2_ > C1 | 1.0 / 30.0
+        C1 > A2 + B2 | 1.0
+
     m = get_model()
 
     w1 = meso.MesoscopicWorld(edge_lengths, Integer3(3, 3, 3))
@@ -304,14 +307,18 @@ def test5():
     sim2 = meso.MesoscopicSimulator(w2)
 
     owner = Coordinator()
-    owner.add_event(simulator_event(sim1)).add(('A1', 'A2'))
+    ev1 = simulator_event(sim1)
+    ev1.add(('A1', 'A2', 'C1'))
+    ev1.borrow('B2', 'B2_')
+    owner.add_event(ev1)
     owner.add_event(simulator_event(sim2)).add(('B1', 'B2'))
     owner.set_value(Species("A1"), 120)
     # owner.set_value(Species("A1"), 60)
     # owner.set_value(Species("B1"), 60)
     owner.initialize()
 
-    logger = Logger(owner, ("A1", "A2", "B1", "B2"))
+    logger = Logger(owner, ("A1", "A2", "C1", "B1", "B2"))
+    logger.add('B2_', w1)
 
     logger.log()
     while owner.step(5):

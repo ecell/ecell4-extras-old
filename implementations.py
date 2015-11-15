@@ -267,6 +267,29 @@ class GillespieEvent(DiscreteEvent):
         assert self.sim != rhs.sim
         return GillespieSimulatorAdapter(self, rhs)
 
+class MesoscopicWorldAdapter:
+
+    def __init__(self, lhs, rhs):
+        self.lhs = lhs
+        self.rhs = rhs
+
+    def list_coordinates_exact(self, sp):
+        assert isinstance(self.rhs.world, meso.MesoscopicWorld)
+        ratios = [
+            float(y) / float(x)
+            for x, y in zip(self.lhs.world.matrix_sizes(), self.rhs.world.matrix_sizes())]
+        rng = self.lhs.world.rng()
+        def convert(coord):
+            g1 = self.lhs.world.coord2global(coord)
+            g2 = Integer3(*[int(rng.uniform(g1[i] * ratios[i], (g1[i] + 1) * ratios[i])) for i in range(3)])
+            return self.rhs.world.global2coord(g2)
+        coords = [convert(coord) for coord in self.lhs.world.list_coordinates_exact(sp)]
+        coords.sort()
+        return coords
+
+    def __getattr__(self, name):
+        return getattr(self.lhs.world, name)
+
 class MesoscopicSimulatorAdapter(SimulatorAdapter):
 
     def __init__(self, lhs, rhs):
@@ -279,11 +302,27 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
                 float(y) / float(x)
                 for x, y in zip(self.lhs.world.matrix_sizes(), self.rhs.world.matrix_sizes())]
             rng = self.lhs.world.rng()
-            def convert(coord):
+            def convert(ri):
+                reactants = ri.reactants()
+                coord = ri.coordinate()
                 g1 = self.lhs.world.coord2global(coord)
-                g2 = Integer3(*[int(rng.uniform(g1[i] * ratios[i], (g1[i] + 1) * ratios[i])) for i in range(3)])
-                return self.rhs.world.global2coord(g2)
-            return [(rr, meso.ReactionInfo(ri.t(), ri.reactants(), ri.products(), convert(ri.coordinate())))
+                if len(reactants) < 2:
+                    g2 = Integer3(*[int(rng.uniform(g1[i] * ratios[i], (g1[i] + 1) * ratios[i])) for i in range(3)])
+                    newcoord = self.rhs.world.global2coord(g2)
+                else:
+                    assert len(reactants) == 2
+                    sp = self.lhs.owe(reactants[1])
+                    if sp is None or not self.rhs.own(sp):
+                        g2 = Integer3(*[int(rng.uniform(g1[i] * ratios[i], (g1[i] + 1) * ratios[i])) for i in range(3)])
+                        newcoord = self.rhs.world.global2coord(g2)
+                    else:
+                        coords = [c for c in self.rhs.world.list_coordinates_exact(sp) if all(g1[i] * ratios[i] <= self.rhs.world.coord2global(c)[i] < (g1[i] + 1) * ratios[i] for i in range(3))]
+                        assert len(coords) > 0
+                        newcoord = coords[rng.uniform_int(0, len(coords) - 1)]
+                        reactants[1] = sp
+                        # print(tuple(self.lhs.world.coord2global(coord)), tuple(self.rhs.world.coord2global(newcoord)))
+                return meso.ReactionInfo(ri.t(), reactants, ri.products(), newcoord)
+            return [(rr, convert(ri))
                     for (rr, ri) in self.lhs.sim.last_reactions()]
         elif isinstance(self.rhs.sim, (ode.ODESimulator, gillespie.GillespieSimulator)):
             return [(rr, gillespie.ReactionInfo(ri.t(), ri.reactants(), ri.products()))
@@ -361,6 +400,9 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
                 return egfrd.ReactionInfo(ri.t(), reactants, products)
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
         raise ValueError("Not supported yet [{}].".format(repr(self.rhs.sim)))
+
+    def world(self):
+        return MesoscopicWorldAdapter(self.lhs, self.rhs)
 
 class MesoscopicEvent(DiscreteEvent):
 
