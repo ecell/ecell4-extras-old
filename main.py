@@ -333,11 +333,11 @@ def test5():
     logger.savetxt()
 
 def test6():
-    D, radius = 1, 0.005
+    D, radius = 0.1, 0.005
 
     with species_attributes():
         A1 | A2 | {"D": str(D), "radius": str(radius)}
-        B1 | B2 | {"D": str(D * 0.1), "radius": str(radius), "location": "M"}
+        B1 | B2 | {"D": str(D), "radius": str(radius), "location": "M"}
 
     with reaction_rules():
         A1 + B1_ > B2 | 1.0 / 30.0
@@ -345,16 +345,16 @@ def test6():
 
     m = get_model()
 
-    plane = PlanarSurface(Real3(0.5, 0.5, 0.5), Real3(0, 0, 1), Real3(0, 1, 0))
-
-    w1 = meso.MesoscopicWorld(Real3(1, 1, 1), Integer3(9, 9, 9))
+    w1 = meso.MesoscopicWorld(Real3(10, 1, 1), Integer3(90, 3, 3))
     w1.bind_to(m)
-    w1.add_structure(Species("M"), plane)
+    w1.add_structure(
+        Species("M"), PlanarSurface(Real3(5.0, 0.5, 0.5), Real3(0, 0, 1), Real3(0, 1, 0)))
     sim1 = meso.MesoscopicSimulator(w1)
 
     w2 = spatiocyte.SpatiocyteWorld(Real3(1, 1, 1), radius)
     w2.bind_to(m)
-    w2.add_structure(Species("M"), plane)
+    w2.add_structure(
+        Species("M"), PlanarSurface(Real3(0.5, 0.5, 0.5), Real3(0, 0, 1), Real3(0, 1, 0)))
     sim2 = spatiocyte.SpatiocyteSimulator(w2)
 
     owner = Coordinator()
@@ -363,17 +363,36 @@ def test6():
     ev1.borrow('B1', 'B1_')
     owner.add_event(ev1)
     owner.add_event(simulator_event(sim2)).add(('B1', 'B2'))
-    owner.set_value(Species("A1"), 120)
+    owner.set_value(Species("A1"), 1200)
     owner.set_value(Species("B1"), 30)
     owner.initialize()
 
     logger = Logger(owner, ("A1", "A2", "B1", "B2"))
     logger.add("B1_", w1)
 
+    # logger.log()
+    # while owner.step(10):
+    #     if owner.last_event.event_kind == EventKind.REACTION_EVENT:
+    #         logger.log()
+    #         print('{} => {}'.format(owner.t(), repr(owner.last_event)))
+    # logger.log()
+
     logger.log()
-    while owner.step(10):
-        if owner.last_event.event_kind == EventKind.REACTION_EVENT:
-            logger.log()
+    tnext, dt = 0.0, 1.0
+    for _ in range(21):
+        while owner.step(tnext):
+            if owner.last_event.event_kind == EventKind.REACTION_EVENT:
+                logger.log()
+
+        for x in range(90):
+            count1, count2 = 0, 0
+            for y in range(3):
+                for z in range(3):
+                    count1 += w1.num_molecules_exact(Species("A1"), Integer3(x, y, z))
+                    count2 += w1.num_molecules_exact(Species("A2"), Integer3(x, y, z))
+            print("{} {} {} {}".format(owner.t(), x, count1, count2))
+        tnext += dt
+
     logger.log()
 
     logger.savefig()
