@@ -338,8 +338,7 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
                                 (g[1] + rng.uniform(0, 1)) * lengths[1],
                                 (g[2] + rng.uniform(0, 1)) * lengths[2])
                     assert ri.coordinate() == self.lhs.world.position2coordinate(pos)
-                    pos[0] -= 5.0 - 0.5  #XXX: translate me
-                    coord = self.rhs.world.position2coordinate(pos)  #XXX: This may cause an overlap
+                    coord = self.rhs(self.lhs).world().position2coordinate(pos)
                     # assert ri.coordinate() == self.lhs.world.position2coordinate(self.rhs.world.coordinate2position(coord))  #XXX: This is not always True.
                     reactants = [(ParticleID(), Voxel(sp, coord, 0, 0))
                                  for sp in ri.reactants()]
@@ -353,17 +352,14 @@ class MesoscopicSimulatorAdapter(SimulatorAdapter):
                                     (g[1] + rng.uniform(0, 1)) * lengths[1],
                                     (g[2] + rng.uniform(0, 1)) * lengths[2])
                         assert ri.coordinate() == self.lhs.world.position2coordinate(pos)
-                        pos[0] -= 5.0 - 0.5  #XXX: translate me
-                        coord = self.rhs.world.position2coordinate(pos)  #XXX: This may cause an overlap
+                        coord = self.rhs(self.lhs).world().position2coordinate(pos)
                         # assert ri.coordinate() == self.lhs.world.position2coordinate(self.rhs.world.coordinate2position(coord))  #XXX: This is not always True.
                         reactants = [(ParticleID(), Voxel(sp, coord, 0, 0))
                                      for sp in ri.reactants()]
                         products = [(ParticleID(), Voxel(sp, coord, 0, 0))
                                      for sp in ri.products()]
                     else:
-                        def shift(p1):
-                            return Real3(p1[0] + 5.0 - 0.5, p1[1], p1[2])  #XXX: translate me
-                        voxels = [(pid, v) for pid, v in self.rhs.world.list_voxels_exact(sp) if self.lhs.world.position2coordinate(shift(self.rhs.world.coordinate2position(v.coordinate()))) == ri.coordinate()]
+                        voxels = [(pid, v) for pid, v in self.rhs.world.list_voxels_exact(sp) if self.lhs.world.position2coordinate(self.rhs(self.lhs).world().coordinate2position(v.coordinate())) == ri.coordinate()]
                         v = voxels[rng.uniform_int(0, len(voxels) - 1)]
                         reactants = [(ParticleID(), Voxel(ri.reactants()[0], v[1].coordinate(), 0, 0)), v]
                         products = [(ParticleID(), Voxel(sp, v[1].coordinate(), 0, 0))
@@ -473,12 +469,18 @@ class SpatiocyteWorldAdapter:
         self.lhs = lhs
         self.rhs = rhs
 
+    def coordinate2position(self, coord):
+        pos = self.lhs.world.coordinate2position(coord)
+        return Real3(pos[0] + (5.0 - 0.5), pos[1], pos[2])
+
+    def position2coordinate(self, pos):
+        return self.lhs.world.position2coordinate(
+            Real3(pos[0] - (5.0 - 0.5), pos[1], pos[2]))
+
     def list_coordinates_exact(self, sp):
         assert isinstance(self.rhs.world, meso.MesoscopicWorld)
-        def shift(p1):
-            return Real3(p1[0] + 5.0 - 0.5, p1[1], p1[2])  #XXX: translate me
         coords = [self.rhs.world.position2coordinate(
-                      shift(self.lhs.world.coordinate2position(v.coordinate())))
+                      self.coordinate2position(v.coordinate()))
                   for pid, v in self.lhs.world.list_voxels_exact(sp)]
         coords.sort()
         return coords
@@ -507,8 +509,7 @@ class SpatiocyteSimulatorAdapter(SimulatorAdapter):
                 reactants = [v.species() for pid, v in ri.reactants()]
                 products = [v.species() for pid, v in ri.products()]
                 assert len(products) > 0
-                pos = self.lhs.world.coordinate2position(ri.products()[0][1].coordinate())  #XXX: translate me
-                pos = Real3(pos[0] + 5.0 - 0.5, pos[1], pos[2])  #XXX: translate me
+                pos = self.world().coordinate2position(ri.products()[0][1].coordinate())
                 coord = self.rhs.world.position2coordinate(pos)
                 return meso.ReactionInfo(ri.t(), reactants, products, coord)
             return [(rr, convert(ri)) for (rr, ri) in self.lhs.sim.last_reactions()]
