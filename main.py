@@ -287,6 +287,10 @@ def test4():
 
 def test5():
     edge_lengths = Real3(1, 1, 1)
+    D, radius = 1, 0.005
+
+    with species_attributes():
+        A1 | A2 | B1 | B2 | C1 | {"D": str(D), "radius": str(radius)}
 
     with reaction_rules():
         A1 == A2 | (1.0, 1.0)
@@ -312,16 +316,16 @@ def test5():
     ev1.borrow('B2', 'B2_')
     owner.add_event(ev1)
     owner.add_event(simulator_event(sim2)).add(('B1', 'B2'))
-    owner.set_value(Species("A1"), 120)
-    # owner.set_value(Species("A1"), 60)
-    # owner.set_value(Species("B1"), 60)
+    owner.set_value(Species("A1"), 180)
+    # owner.set_value(Species("A1"), 90)
+    # owner.set_value(Species("B1"), 90)
     owner.initialize()
 
     logger = Logger(owner, ("A1", "A2", "C1", "B1", "B2"))
     logger.add('B2_', w1)
 
     logger.log()
-    while owner.step(5):
+    while owner.step(10):
         if owner.last_event.event_kind == EventKind.REACTION_EVENT:
             logger.log()
 
