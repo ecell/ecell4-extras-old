@@ -2,7 +2,7 @@
 
 import numpy
 
-from ecell4.core import Real3, Integer3, Species
+from ecell4.core import Real3, Integer3, Species, PlanarSurface
 from ecell4 import gillespie, meso, spatiocyte, egfrd, ode
 from ecell4.util import species_attributes, reaction_rules, get_model
 
@@ -332,10 +332,58 @@ def test5():
     logger.savefig()
     logger.savetxt()
 
+def test6():
+    D, radius = 1, 0.005
+
+    with species_attributes():
+        A1 | A2 | {"D": str(D), "radius": str(radius)}
+        B1 | B2 | {"D": str(D * 0.1), "radius": str(radius), "location": "M"}
+
+    with reaction_rules():
+        A1 + B1_ > B2 | 1.0 / 30.0
+        B2 > A2 + B1 | 1.0
+
+    m = get_model()
+
+    plane = PlanarSurface(Real3(0.5, 0.5, 0.5), Real3(0, 0, 1), Real3(0, 1, 0))
+
+    w1 = meso.MesoscopicWorld(Real3(1, 1, 1), Integer3(9, 9, 9))
+    w1.bind_to(m)
+    w1.add_structure(Species("M"), plane)
+    sim1 = meso.MesoscopicSimulator(w1)
+
+    w2 = spatiocyte.SpatiocyteWorld(Real3(1, 1, 1), radius)
+    w2.bind_to(m)
+    w2.add_structure(Species("M"), plane)
+    sim2 = spatiocyte.SpatiocyteSimulator(w2)
+
+    owner = Coordinator()
+    ev1 = simulator_event(sim1)
+    ev1.add(('A1', 'A2'))
+    ev1.borrow('B1', 'B1_')
+    owner.add_event(ev1)
+    owner.add_event(simulator_event(sim2)).add(('B1', 'B2'))
+    owner.set_value(Species("A1"), 120)
+    owner.set_value(Species("B1"), 30)
+    owner.initialize()
+
+    logger = Logger(owner, ("A1", "A2", "B1", "B2"))
+    logger.add("B1_", w1)
+
+    logger.log()
+    while owner.step(10):
+        if owner.last_event.event_kind == EventKind.REACTION_EVENT:
+            logger.log()
+    logger.log()
+
+    logger.savefig()
+    logger.savetxt()
+
 
 if __name__ == "__main__":
     # test1()
     # test2()
     # test3()
     # test4()
-    test5()
+    # test5()
+    test6()
