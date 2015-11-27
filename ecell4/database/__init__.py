@@ -1,4 +1,4 @@
-# from ecell4.core import Species
+from ecell4.core import Species
 try:
     from urllib2 import Request, urlopen
 except ImportError:
@@ -20,10 +20,9 @@ class UniProtSource(DataSource):
 
     @classmethod
     def getid(cls, obj):
-        # if isinstance(obj, Species) and obj.has_attribute("uniprot.id"):
-        #     return obj.get_attribute("uniprot.id")
-        # elif isinstance(obj, str):
-        if isinstance(obj, str):
+        if isinstance(obj, Species) and obj.has_attribute("uniprot.id"):
+            return obj.get_attribute("uniprot.id")
+        elif isinstance(obj, str):
             return obj
         else:
             return None
@@ -46,7 +45,6 @@ def description(obj, database="uniprot"):
 
 
 if __name__ == "__main__":
-    # sp = Species("MinD")
-    # sp.set_attribute("uniprot.id", "P0AEZ3")
-    # print(description(sp, database="uniprot")) 
-    print(description("P0AEZ3", database="uniprot"))
+    sp = Species("MinD")
+    sp.set_attribute("uniprot.id", "P0AEZ3")
+    print(description(sp, database="uniprot")) 
