@@ -1,90 +1,149 @@
 import libsbml
 
+try:
+    from urllib2 import Request, urlopen
+except ImportError:
+    from urllib.request import Request, urlopen
 
 class SBMLDataSource(object):
 
-    def __init__(self, filename):
-        self.__data = libsbml.SBMLReader().readSBML(filename)
-        self.__model = self.__data.getModel()
+    def __init__(self, filename=None):
+        if filename is not None:
+            self.read(filename)
 
-        # print(dir(self.__model))
-        # print(self.__model.getListOfParameters())
-        # print(self.__model.getListOfReactions())
+    def read(self, filename):
+        self.data = libsbml.SBMLReader().readSBML(filename)
+        self.model = self.data.getModel()
+
+    def read_from_string(self, xml):
+        self.data = libsbml.SBMLReader().readSBMLFromString(xml)
+        self.model = self.data.getModel()
 
     def initial_amounts(self):
-        compartments = dict(self.compartments())
-
-        for sp in self.__model.species:
+        for sp in self.model.species:
             if sp.isSetInitialAmount():
                 yield (sp.id, sp.initial_amount)
-            elif sp.isSetInitialConcentration():
+
+    def initial_concentration(self):
+        for sp in self.model.species:
+            if sp.isSetInitialConcentration():
                 yield (sp.id, sp.initial_concentration)
-                # yield (sp.id, sp.initial_concentration * compartments[sp.compartment])
 
     def compartments(self):
-        for comp in self.__model.compartments:
+        for comp in self.model.compartments:
             yield (comp.id, comp.volume)
 
     def parameters(self):
-        for p in self.__model.parameters:
+        for p in self.model.parameters:
             yield (p.id, p.value)
 
-    def assignment_rules(self):
-        for rule in self.__model.rules:
+    def assignment_rules(self, evalfunc=None, kwargs=None):
+        for rule in self.model.rules:
             if rule.isAssignment():
-                yield (rule.variable, rule.formula)
+                if evalfunc is None:
+                    yield (rule.variable, rule.formula)
+                else:
+                    #XXX: Why not evaluate variable?
+                    yield (rule.variable, evalfunc(rule.formula, kwargs))
 
-    def reactions(self):
-        for r in self.__model.reactions:
+    def reactions(self, evalfunc=None, kwargs=None):
+        for r in self.model.reactions:
             reactants = [(reactant.species, reactant.stoichiometry)
                          for reactant in r.reactants]
             products = [(product.species, product.stoichiometry)
                         for product in r.products]
 
             formula = r.getKineticLaw().formula
-            parameters = dict((p.id, p.value) for p in r.getKineticLaw().parameters)
+            params = dict((p.id, p.value) for p in r.getKineticLaw().parameters)
 
-            yield (reactants, products, formula, parameters)
+            if evalfunc is None:
+                yield (reactants, products, formula, params)
+            else:
+                params.update(kwargs)
+                yield (sum((evalfunc(sp, params) * coef for sp, coef in reactants), evalfunc('~EmptySet')),
+                       sum((evalfunc(sp, params) * coef for sp, coef in products), evalfunc('~EmptySet')),
+                       evalfunc(formula, params))
+
+class BioModelsDataSource(SBMLDataSource):
+
+    URL = "https://www.ebi.ac.uk/biomodels-main/download?mid={mid}"
+    XML = {}
+
+    def __init__(self, mid, cache=True):
+        SBMLDataSource.__init__(self)
+
+        if not cache or mid not in self.XML.keys():
+            url = self.URL.format(mid=mid)
+            req = Request(url)
+            response = urlopen(req)
+            xml = response.read().decode('utf-8')
+            if cache:
+                self.XML[mid] = xml
+        else:
+            xml = self.XML[mid]
+
+        self.read_from_string(xml)
 
 
 if __name__ == '__main__':
     import sys
-    # from operator import add
-    # from functools import reduce, partial
-
 
     from ecell4 import *
-    sbml = SBMLDataSource
+    biomodels = BioModelsDataSource
 
-    filename = sys.argv[1]
+    mid = 'BIOMD0000000005'
 
-    y0 = dict(sbml(filename).initial_amounts())
-    # y0.update(dict(sbml(filename).compartments()))
+    y0 = dict(biomodels(mid).initial_amounts())
     print(y0)
 
-    params = dict(sbml(filename).parameters())
-    params.update(dict(sbml(filename).compartments()))
-    params['compartment'] = 1.0
+    params = dict(biomodels(mid).parameters())
+    params.update(biomodels(mid).compartments())
     print(params)
 
     with reaction_rules():
-        # params.update(dict((var, _eval(formula)) for var, formula in sbml(filename).assignment_rules()))
-        print(dict((var, _eval(formula)) for var, formula in sbml(filename).assignment_rules()))
+        params['EmptySet'] = ~EmptySet  #XXX: Just ignore EmptySet
+        params.update(dict(biomodels(mid).assignment_rules(_eval, params)))
 
-        for reactants, products, formula, parameters in sbml(filename).reactions():
-            parameters.update(params)
-
-            (sum((_eval(sp) * coef for sp, coef in reactants), ~EmptySet)
-                    > sum((_eval(sp) * coef for sp, coef in products), ~EmptySet) | _eval(formula, parameters))
-
-            # _sum(reactants) > _sum(products) | _eval(formula, params)
-            # _sum(_mul(reactants, reactant_coefficients)) > _sum(_mul(products, product_coefficients)) | _eval(formula, params)
+        for reactants, products, formula in biomodels(mid).reactions(_eval, params):
+            reactants > products | formula
 
     m = get_model()
     print([rr.as_string() for rr in m.reaction_rules()])
 
-    run_simulation(60, model=m, y0=y0, opt_kwargs={'legend': False})
-    # w = run_simulation(0.0032, model=m, y0=y0, species_list=['x1'], return_type='world')
-    # y0 = dict((sp.serial(), w.get_value(sp)) for sp in w.list_species())
-    # y0['k5'] = 1.55
-    # run_simulation(0.1, model=m, y0=y0, species_list=['x1'])
+    run_simulation(100, model=m, y0=y0)
+
+    # sbml = SBMLDataSource
+    #     for reactants, products, formula, parameters in sbml(filename).reactions():
+
+    # filename = sys.argv[1]
+
+    # y0 = dict(sbml(filename).initial_amounts())
+    # # y0.update(dict(sbml(filename).compartments()))
+    # print(y0)
+
+    # params = dict(sbml(filename).parameters())
+    # params.update(dict(sbml(filename).compartments()))
+    # params['compartment'] = 1.0
+    # print(params)
+
+    # with reaction_rules():
+    #     # params.update(dict((var, _eval(formula)) for var, formula in sbml(filename).assignment_rules()))
+    #     print(dict((var, _eval(formula)) for var, formula in sbml(filename).assignment_rules()))
+
+    #     for reactants, products, formula, parameters in sbml(filename).reactions():
+    #         parameters.update(params)
+
+    #         (sum((_eval(sp) * coef for sp, coef in reactants), ~EmptySet)
+    #                 > sum((_eval(sp) * coef for sp, coef in products), ~EmptySet) | _eval(formula, parameters))
+
+    #         # _sum(reactants) > _sum(products) | _eval(formula, params)
+    #         # _sum(_mul(reactants, reactant_coefficients)) > _sum(_mul(products, product_coefficients)) | _eval(formula, params)
+
+    # m = get_model()
+    # print([rr.as_string() for rr in m.reaction_rules()])
+
+    # run_simulation(60, model=m, y0=y0, opt_kwargs={'legend': False})
+    # # w = run_simulation(0.0032, model=m, y0=y0, species_list=['x1'], return_type='world')
+    # # y0 = dict((sp.serial(), w.get_value(sp)) for sp in w.list_species())
+    # # y0['k5'] = 1.55
+    # # run_simulation(0.1, model=m, y0=y0, species_list=['x1'])

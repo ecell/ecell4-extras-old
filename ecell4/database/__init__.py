@@ -47,4 +47,4 @@ def description(obj, database="uniprot"):
 if __name__ == "__main__":
     sp = Species("MinD")
     sp.set_attribute("uniprot.id", "P0AEZ3")
-    print(description(sp, database="uniprot")) 
+    print(description(sp, database="uniprot"))
