@@ -11,16 +11,28 @@ class SBMLDataSource(object):
         # print(self.__model.getListOfParameters())
         # print(self.__model.getListOfReactions())
 
-    def species(self):
+    def initial_amounts(self):
+        compartments = dict(self.compartments())
+
         for sp in self.__model.species:
             if sp.isSetInitialAmount():
                 yield (sp.id, sp.initial_amount)
-            # if sp.isSetInitialConcentration():
-            #     yield (sp.id, sp.initial_amount, sp.initial_concentration)
+            elif sp.isSetInitialConcentration():
+                yield (sp.id, sp.initial_concentration)
+                # yield (sp.id, sp.initial_concentration * compartments[sp.compartment])
+
+    def compartments(self):
+        for comp in self.__model.compartments:
+            yield (comp.id, comp.volume)
 
     def parameters(self):
         for p in self.__model.parameters:
             yield (p.id, p.value)
+
+    def assignment_rules(self):
+        for rule in self.__model.rules:
+            if rule.isAssignment():
+                yield (rule.variable, rule.formula)
 
     def reactions(self):
         for r in self.__model.reactions:
@@ -28,8 +40,11 @@ class SBMLDataSource(object):
                          for reactant in r.reactants]
             products = [(product.species, product.stoichiometry)
                         for product in r.products]
+
             formula = r.getKineticLaw().formula
-            yield (reactants, products, formula)
+            parameters = dict((p.id, p.value) for p in r.getKineticLaw().parameters)
+
+            yield (reactants, products, formula, parameters)
 
 
 if __name__ == '__main__':
@@ -43,35 +58,33 @@ if __name__ == '__main__':
 
     filename = sys.argv[1]
 
-    y0 = dict(sbml(filename).species())
+    y0 = dict(sbml(filename).initial_amounts())
+    # y0.update(dict(sbml(filename).compartments()))
     print(y0)
+
     params = dict(sbml(filename).parameters())
+    params.update(dict(sbml(filename).compartments()))
+    params['compartment'] = 1.0
     print(params)
 
     with reaction_rules():
-        for reactants, products, formula in sbml(filename).reactions():
-            # print(reactants, products, formula)
-            # concat(reactants) > concat(products) | _eval(formula)
+        # params.update(dict((var, _eval(formula)) for var, formula in sbml(filename).assignment_rules()))
+        print(dict((var, _eval(formula)) for var, formula in sbml(filename).assignment_rules()))
 
-            (sum((_eval(sp) * coef for sp, coef in reactants), ~X)
-                    > sum((_eval(sp) * coef for sp, coef in products), ~X) | _eval(formula, params))
+        for reactants, products, formula, parameters in sbml(filename).reactions():
+            parameters.update(params)
 
-            # line = ''
-            # if len(reactants) > 0:
-            #     line += '+'.join('{}*{}'.format(sp, coef) for sp, coef in reactants)
-            # else:
-            #     line += '~X'
-            # if len(products) > 0:
-            #     line += '>' + '+'.join('{}*{}'.format(sp, coef) for sp, coef in products)
-            # else:
-            #     line += '>~X'
-            # line += '|' + formula
-            # evaluate(line)
+            (sum((_eval(sp) * coef for sp, coef in reactants), ~EmptySet)
+                    > sum((_eval(sp) * coef for sp, coef in products), ~EmptySet) | _eval(formula, parameters))
+
+            # _sum(reactants) > _sum(products) | _eval(formula, params)
+            # _sum(_mul(reactants, reactant_coefficients)) > _sum(_mul(products, product_coefficients)) | _eval(formula, params)
 
     m = get_model()
     print([rr.as_string() for rr in m.reaction_rules()])
 
-    # with reaction_rules():
-    #     for reactants, products, formula in sbml(filename).reactions():
-    #         # print(reactants, products, formula)
-    #         print(repr(evaluate(formula)))
+    run_simulation(60, model=m, y0=y0, opt_kwargs={'legend': False})
+    # w = run_simulation(0.0032, model=m, y0=y0, species_list=['x1'], return_type='world')
+    # y0 = dict((sp.serial(), w.get_value(sp)) for sp in w.list_species())
+    # y0['k5'] = 1.55
+    # run_simulation(0.1, model=m, y0=y0, species_list=['x1'])
