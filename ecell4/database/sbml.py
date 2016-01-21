@@ -37,7 +37,7 @@ class SBMLDataSource(object):
         for p in self.model.parameters:
             yield (p.id, p.value)
 
-    def assignment_rules(self, evalfunc=None, kwargs=None):
+    def assignment_rules(self, evalfunc=None, kwargs={}):
         for rule in self.model.rules:
             if rule.isAssignment():
                 if evalfunc is None:
@@ -46,7 +46,7 @@ class SBMLDataSource(object):
                     #XXX: Why not evaluate variable?
                     yield (rule.variable, evalfunc(rule.formula, kwargs))
 
-    def reactions(self, evalfunc=None, kwargs=None):
+    def reactions(self, evalfunc=None, kwargs={}):
         for r in self.model.reactions:
             reactants = [(reactant.species, reactant.stoichiometry)
                          for reactant in r.reactants]
