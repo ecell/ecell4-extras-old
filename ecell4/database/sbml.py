@@ -16,6 +16,11 @@ class SBMLDataSource(object):
         self.model = self.data.getModel()
 
     def read_from_string(self, xml):
+        try:
+            if isinstance(xml, unicode):
+                xml = xml.encode('utf-8')
+        except NameError:
+            pass  # Python3
         self.data = libsbml.SBMLReader().readSBMLFromString(xml)
         self.model = self.data.getModel()
 
@@ -82,6 +87,7 @@ class BioModelsDataSource(SBMLDataSource):
         else:
             xml = self.XML[mid]
 
+        #import pdb; pdb.set_trace()
         self.read_from_string(xml)
 
 
@@ -100,6 +106,7 @@ if __name__ == '__main__':
     params.update(biomodels(mid).compartments())
     print(params)
 
+
     with reaction_rules():
         params['EmptySet'] = ~EmptySet  #XXX: Just ignore EmptySet
         params.update(dict(biomodels(mid).assignment_rules(_eval, params)))
@@ -110,7 +117,7 @@ if __name__ == '__main__':
     m = get_model()
     print([rr.as_string() for rr in m.reaction_rules()])
 
-    run_simulation(100, model=m, y0=y0)
+    print(run_simulation(100, model=m, y0=y0, return_type='array'))
 
     # sbml = SBMLDataSource
     #     for reactants, products, formula, parameters in sbml(filename).reactions():
