@@ -1,50 +1,59 @@
-from ecell4.core import Species
-try:
-    from urllib2 import Request, urlopen
-except ImportError:
-    from urllib.request import Request, urlopen
+def print_descriptions(desc):
+    for i, entry in enumerate(desc):
+        if i > 0:
+            print()
+        for line in entry:
+            assert len(line) == 2 or len(line) == 3
+            if line[1] is None or line[1] == '':
+                continue
+            if len(line) == 2:
+                print('{0}: {1}'.format(*line))
+            else:
+                print('{0}{2}{1}'.format(*line))
 
-class DataSource:
+def __description(entity, collections):
+    desc = []
 
-    def __init__(self):
-        pass
+    if collections is None or 'uniprot' in collections:
+        from . import uniprot
+        desc.extend(uniprot.description(entity))
 
-    @classmethod
-    def description(cls, uid):
-        return None
+    if collections is None or 'pdb' in collections:
+        from . import pdb
+        desc.extend(pdb.description(entity))
 
-class UniProtSource(DataSource):
+    if collections is None or 'pubmed' in collections:
+        from . import pubmed
+        desc.extend(pubmed.description(entity))
 
-    def __init__(self):
-        pass
+    return desc
 
-    @classmethod
-    def getid(cls, obj):
-        if isinstance(obj, Species) and obj.has_attribute("uniprot.id"):
-            return obj.get_attribute("uniprot.id")
-        elif isinstance(obj, str):
-            return obj
-        else:
-            return None
+def description(entity, collections=None):
+    from ecell4 import Species
 
-    @classmethod
-    def description(cls, obj):
-        uid = cls.getid(obj)
-        if uid is None:
-            return None
-        url = 'http://www.uniprot.org/uniprot/{}.txt'.format(uid)
-        req = Request(url)
-        response = urlopen(req)
-        data = response.read()
-        return data.decode('utf-8')
+    if isinstance(collections, str):
+        collections = [collections]
 
-def description(obj, database="uniprot"):
-    if database == "uniprot":
-        return UniProtSource.description(obj)
-    return None
+    if isinstance(entity, (str, Species)):
+        desc = __description(entity, collections)
+    else:
+        desc = []
+        for e in entity:
+            desc.extend(__description(e, collections))
+
+    print_descriptions(desc)
+
+def whereis(entity, collections=None):
+    if isinstance(collections, str):
+        collections = [collections]
+
+    desc = []
+
+    if collections is None or 'uniprot' in collections:
+        from . import uniprot
+        desc.extend(uniprot.whereis(entity))
+
+    print_descriptions(desc)
 
 
-if __name__ == "__main__":
-    sp = Species("MinD")
-    sp.set_attribute("uniprot.id", "P0AEZ3")
-    print(description(sp, database="uniprot"))
+__all__ = ['description', 'whereis']
