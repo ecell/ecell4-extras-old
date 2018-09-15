@@ -8,5 +8,6 @@ setup(
     license='the GNU General Public License v2',
     author='Kazunari Kaizu',
     author_email='kaizu@riken.jp',
-    description='An extra package other than the core part of the cell simulation platform E-Cell4'
+    description='An extra package other than the core part of the cell simulation platform E-Cell4',
+    install_requires=['ecell']
 )
